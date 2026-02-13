@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="csrf-token" content="<?php echo e(csrf_token()); ?>">
     <title>Data Pelanggan - Laundry System</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <?php echo app('Illuminate\Foundation\Vite')(['resources/css/app.css', 'resources/js/app.js']); ?>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         .swal2-container.swal2-top-end {
@@ -33,7 +33,7 @@
 <body class="bg-gradient-to-br from-blue-50 to-gray-100 min-h-screen">
     
     <div class="flex">
-        @include('admin.sidebar')
+        <?php echo $__env->make('admin.sidebar', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
         <div class="flex-1 flex flex-col min-h-screen">
             <header class="bg-white shadow-sm sticky top-0 z-20">
@@ -43,7 +43,8 @@
                         <p class="text-xs sm:text-sm text-gray-600">Kelola data pelanggan laundry</p>
                     </div>
                     <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold">
-                        {{ substr(Auth::user()->name ?? 'A', 0, 1) }}
+                        <?php echo e(substr(Auth::user()->name ?? 'A', 0, 1)); ?>
+
                     </div>
                 </div>
             </header>
@@ -75,84 +76,85 @@
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200">
-                            @forelse ($pelanggan as $i => $item)
+                            <?php $__empty_1 = true; $__currentLoopData = $pelanggan; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $i => $item): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                             <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 text-sm text-gray-700">{{ $pelanggan->firstItem() + $i }}</td>
+                                <td class="px-6 py-4 text-sm text-gray-700"><?php echo e($pelanggan->firstItem() + $i); ?></td>
                                 <td class="px-6 py-4">
                                     <div class="flex items-center">
-                                        <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold mr-3">{{ substr($item->name, 0, 1) }}</div>
-                                        <span class="font-medium text-gray-900">{{ $item->name }}</span>
+                                        <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold mr-3"><?php echo e(substr($item->name, 0, 1)); ?></div>
+                                        <span class="font-medium text-gray-900"><?php echo e($item->name); ?></span>
                                     </div>
                                 </td>
-                                <td class="px-6 py-4 text-sm text-gray-700">{{ $item->email }}</td>
-                                <td class="px-6 py-4 text-sm text-gray-700">{{ $item->phone ?? '-' }}</td>
-                                <td class="px-6 py-4 text-sm text-gray-700">{{ $item->alamat ?? '-' }}</td>
+                                <td class="px-6 py-4 text-sm text-gray-700"><?php echo e($item->email); ?></td>
+                                <td class="px-6 py-4 text-sm text-gray-700"><?php echo e($item->phone ?? '-'); ?></td>
+                                <td class="px-6 py-4 text-sm text-gray-700"><?php echo e($item->alamat ?? '-'); ?></td>
                                 <td class="px-6 py-4">
                                     <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
-                                        {{ $item->pesanans_count ?? 0 }} Pesanan
+                                        <?php echo e($item->pesanans_count ?? 0); ?> Pesanan
                                     </span>
                                 </td>
                                 <td class="px-6 py-4">
                                     <div class="flex gap-2">
-                                        <button onclick='viewRiwayat({{ $item->id }})' class="text-purple-600 hover:text-purple-800" title="Riwayat Pesanan">
+                                        <button onclick='viewRiwayat(<?php echo e($item->id); ?>)' class="text-purple-600 hover:text-purple-800" title="Riwayat Pesanan">
                                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                         </button>
-                                        <button onclick='viewDetail(@json($item))' class="text-green-600 hover:text-green-800" title="Detail">
+                                        <button onclick='viewDetail(<?php echo json_encode($item, 15, 512) ?>)' class="text-green-600 hover:text-green-800" title="Detail">
                                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                                         </button>
-                                        <button onclick='editPelanggan(@json($item))' class="text-blue-600 hover:text-blue-800" title="Edit">
+                                        <button onclick='editPelanggan(<?php echo json_encode($item, 15, 512) ?>)' class="text-blue-600 hover:text-blue-800" title="Edit">
                                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                                         </button>
-                                        <button onclick="deletePelanggan({{ $item->id }}, '{{ addslashes($item->name) }}')" class="text-red-600 hover:text-red-800" title="Hapus">
+                                        <button onclick="deletePelanggan(<?php echo e($item->id); ?>, '<?php echo e(addslashes($item->name)); ?>')" class="text-red-600 hover:text-red-800" title="Hapus">
                                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                         </button>
                                     </div>
                                 </td>
                             </tr>
-                            @empty
+                            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                             <tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">Belum ada data pelanggan</td></tr>
-                            @endforelse
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
 
                 <!-- Mobile Cards -->
                 <div class="lg:hidden space-y-3">
-                    @forelse ($pelanggan as $item)
+                    <?php $__empty_1 = true; $__currentLoopData = $pelanggan; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $item): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                     <div class="bg-white rounded-xl shadow-sm p-4">
                         <div class="flex items-center mb-3">
-                            <div class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold mr-3">{{ substr($item->name, 0, 1) }}</div>
+                            <div class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold mr-3"><?php echo e(substr($item->name, 0, 1)); ?></div>
                             <div class="flex-1 min-w-0">
-                                <p class="font-semibold text-gray-900 truncate">{{ $item->name }}</p>
-                                <p class="text-xs text-gray-500 truncate">{{ $item->email }}</p>
+                                <p class="font-semibold text-gray-900 truncate"><?php echo e($item->name); ?></p>
+                                <p class="text-xs text-gray-500 truncate"><?php echo e($item->email); ?></p>
                                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 mt-1">
-                                    {{ $item->pesanans_count ?? 0 }} Pesanan
+                                    <?php echo e($item->pesanans_count ?? 0); ?> Pesanan
                                 </span>
                             </div>
                         </div>
                         <div class="space-y-1 mb-3 text-sm">
-                            <p><span class="font-medium text-gray-700">Telepon:</span> <span class="text-gray-600">{{ $item->phone ?? '-' }}</span></p>
-                            <p><span class="font-medium text-gray-700">Alamat:</span> <span class="text-gray-600">{{ Str::limit($item->alamat ?? '-', 30) }}</span></p>
+                            <p><span class="font-medium text-gray-700">Telepon:</span> <span class="text-gray-600"><?php echo e($item->phone ?? '-'); ?></span></p>
+                            <p><span class="font-medium text-gray-700">Alamat:</span> <span class="text-gray-600"><?php echo e(Str::limit($item->alamat ?? '-', 30)); ?></span></p>
                         </div>
                         <div class="flex gap-2">
-                            <button onclick='viewRiwayat({{ $item->id }})' class="flex-1 bg-purple-100 text-purple-700 px-3 py-2 rounded-lg text-xs font-medium hover:bg-purple-200">Riwayat</button>
-                            <button onclick='viewDetail(@json($item))' class="flex-1 bg-green-100 text-green-700 px-3 py-2 rounded-lg text-xs font-medium hover:bg-green-200">Detail</button>
-                            <button onclick='editPelanggan(@json($item))' class="flex-1 bg-blue-100 text-blue-700 px-3 py-2 rounded-lg text-xs font-medium hover:bg-blue-200">Edit</button>
-                            <button onclick="deletePelanggan({{ $item->id }}, '{{ addslashes($item->name) }}')" class="flex-1 bg-red-100 text-red-700 px-3 py-2 rounded-lg text-xs font-medium hover:bg-red-200">Hapus</button>
+                            <button onclick='viewRiwayat(<?php echo e($item->id); ?>)' class="flex-1 bg-purple-100 text-purple-700 px-3 py-2 rounded-lg text-xs font-medium hover:bg-purple-200">Riwayat</button>
+                            <button onclick='viewDetail(<?php echo json_encode($item, 15, 512) ?>)' class="flex-1 bg-green-100 text-green-700 px-3 py-2 rounded-lg text-xs font-medium hover:bg-green-200">Detail</button>
+                            <button onclick='editPelanggan(<?php echo json_encode($item, 15, 512) ?>)' class="flex-1 bg-blue-100 text-blue-700 px-3 py-2 rounded-lg text-xs font-medium hover:bg-blue-200">Edit</button>
+                            <button onclick="deletePelanggan(<?php echo e($item->id); ?>, '<?php echo e(addslashes($item->name)); ?>')" class="flex-1 bg-red-100 text-red-700 px-3 py-2 rounded-lg text-xs font-medium hover:bg-red-200">Hapus</button>
                         </div>
                     </div>
-                    @empty
+                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                     <div class="bg-white rounded-xl shadow-sm px-6 py-12 text-center text-gray-500">Belum ada data pelanggan</div>
-                    @endforelse
+                    <?php endif; ?>
                 </div>
 
-                @if($pelanggan->hasPages())
+                <?php if($pelanggan->hasPages()): ?>
                 <div class="mt-4">
                     <div class="bg-white rounded-xl shadow-sm px-6 py-4">
-                        {{ $pelanggan->links() }}
+                        <?php echo e($pelanggan->links()); ?>
+
                     </div>
                 </div>
-                @endif
+                <?php endif; ?>
             </main>
         </div>
     </div>
@@ -164,8 +166,8 @@
                 <h3 class="text-xl font-bold">Tambah Pelanggan</h3>
                 <button onclick="closeModal('addModal')" class="text-white text-2xl">&times;</button>
             </div>
-            <form id="addForm" action="{{ route('admin.pelanggan.store') }}" method="POST" class="p-6 space-y-4">
-                @csrf
+            <form id="addForm" action="<?php echo e(route('admin.pelanggan.store')); ?>" method="POST" class="p-6 space-y-4">
+                <?php echo csrf_field(); ?>
                 <div><label class="block text-sm font-medium mb-2">Nama *</label><input type="text" name="name" id="add_name" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div>
                 <div><label class="block text-sm font-medium mb-2">Email *</label><input type="email" name="email" id="add_email" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div>
                 <div><label class="block text-sm font-medium mb-2">Telepon</label><input type="text" name="phone" id="add_phone" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div>
@@ -199,8 +201,8 @@
                 <button onclick="closeModal('editModal')" class="text-white text-2xl">&times;</button>
             </div>
             <form id="editForm" method="POST" class="p-6 space-y-4">
-                @csrf 
-                @method('PUT')
+                <?php echo csrf_field(); ?> 
+                <?php echo method_field('PUT'); ?>
                 <div><label class="block text-sm font-medium mb-2">Nama *</label><input type="text" name="name" id="edit_name" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div>
                 <div><label class="block text-sm font-medium mb-2">Email *</label><input type="email" name="email" id="edit_email" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div>
                 <div><label class="block text-sm font-medium mb-2">Telepon</label><input type="text" name="phone" id="edit_phone" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div>
@@ -230,8 +232,8 @@
                 <h3 class="mt-4 text-lg font-bold text-center">Konfirmasi Hapus</h3>
                 <p class="mt-2 text-sm text-gray-600 text-center">Yakin hapus <strong id="deleteName"></strong>?</p>
                 <form id="deleteForm" method="POST" class="mt-6 flex gap-3">
-                    @csrf 
-                    @method('DELETE')
+                    <?php echo csrf_field(); ?> 
+                    <?php echo method_field('DELETE'); ?>
                     <button type="button" onclick="closeModal('deleteModal')" class="flex-1 bg-gray-200 px-4 py-2 rounded-lg hover:bg-gray-300 font-medium">Batal</button>
                     <button type="submit" class="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 font-medium">Ya, Hapus</button>
                 </form>
@@ -465,27 +467,27 @@
         });
 
         // Show success/error messages
-        @if(session('success'))
+        <?php if(session('success')): ?>
         Swal.fire({
             icon: 'success',
             title: 'Berhasil!',
-            text: '{{ session('success') }}',
+            text: '<?php echo e(session('success')); ?>',
             timer: 3000,
             toast: true,
             position: 'top-end',
             showConfirmButton: false,
             timerProgressBar: true
         });
-        @endif
+        <?php endif; ?>
         
-        @if(session('error'))
+        <?php if(session('error')): ?>
         Swal.fire({
             icon:'error',
             title:'Gagal!',
-            text:'{{ session('error') }}'
+            text:'<?php echo e(session('error')); ?>'
         });
-        @endif
+        <?php endif; ?>
     </script>
-    @stack('scripts')
+    <?php echo $__env->yieldPushContent('scripts'); ?>
 </body>
-</html>
+</html><?php /**PATH C:\laragon\www\project-kik-afnan482\laundry-app\resources\views/admin/pelanggan/index.blade.php ENDPATH**/ ?>

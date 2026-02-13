@@ -7,6 +7,7 @@ use App\Models\Pesanan;
 use App\Models\Layanan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
 
 class PesananController extends Controller
 {
@@ -56,8 +57,8 @@ class PesananController extends Controller
                 'delivery_fee' => $item->delivery_fee,
                 'subtotal' => $item->subtotal,
                 'total' => $item->total,
-                'address' => $item->address,  // DITAMBAHKAN
-                'notes' => $item->notes,      // DITAMBAHKAN
+                'address' => $item->address,
+                'notes' => $item->notes,
                 'payment_method' => $item->payment_method,
                 'status' => $item->status,
                 'created_at' => $item->created_at->format('Y-m-d H:i:s'),
@@ -76,9 +77,9 @@ class PesananController extends Controller
             'weight' => 'required|numeric|min:0.1',
             'is_express' => 'nullable|boolean',
             'status' => 'required|in:pending,proses,selesai,diambil',
-            'address' => 'nullable|string|max:500',      // DITAMBAHKAN
-            'notes' => 'nullable|string|max:500',        // DITAMBAHKAN
-            'payment_method' => 'nullable|in:cash,transfer,ewallet', // DITAMBAHKAN
+            'address' => 'nullable|string|max:500',
+            'notes' => 'nullable|string|max:500',
+            'payment_method' => 'nullable|in:cash,transfer,ewallet',
         ]);
 
         if ($validator->fails()) {
@@ -99,9 +100,12 @@ class PesananController extends Controller
             $baseDuration = $layanan->estimasi_hari ?? 3;
             $estimatedDuration = $isExpress ? '1 hari (24 jam)' : $baseDuration . ' hari';
 
+            // PERBAIKAN: Gunakan Auth facade untuk mendapatkan user ID yang terautentikasi
+            $userId = Auth::check() ? Auth::id() : null;
+
             $pesanan = Pesanan::create([
                 'invoice' => Pesanan::generateInvoice(),
-                'user_id' => auth('admin')->id(),
+                'user_id' => $userId,
                 'layanan_id' => $layanan->id,
                 'customer_name' => $request->customer_name,
                 'customer_phone' => $request->customer_phone,
@@ -113,9 +117,9 @@ class PesananController extends Controller
                 'delivery_fee' => $deliveryFee,
                 'subtotal' => $subtotal,
                 'total' => $total,
-                'address' => $request->address ?? 'Walk-in',           // DIPERBAIKI
-                'notes' => $request->notes,                             // DITAMBAHKAN
-                'payment_method' => $request->payment_method ?? 'cash', // DIPERBAIKI
+                'address' => $request->address ?? 'Walk-in',
+                'notes' => $request->notes,
+                'payment_method' => $request->payment_method ?? 'cash',
                 'status' => $request->status,
                 'estimated_duration' => $estimatedDuration,
             ]);
@@ -134,8 +138,8 @@ class PesananController extends Controller
             'layanan_id' => 'required|exists:layanans,id',
             'weight' => 'required|numeric|min:0.1',
             'final_weight' => 'nullable|numeric|min:0.1',
-            'address' => 'nullable|string|max:500',      // DITAMBAHKAN
-            'notes' => 'nullable|string|max:500',        // DITAMBAHKAN
+            'address' => 'nullable|string|max:500',
+            'notes' => 'nullable|string|max:500',
         ]);
 
         if ($validator->fails()) {
@@ -167,8 +171,8 @@ class PesananController extends Controller
                 'price_per_kg' => $pricePerKg,
                 'subtotal' => $subtotal,
                 'total' => $total,
-                'address' => $request->address ?? $pesanan->address,  // DITAMBAHKAN
-                'notes' => $request->notes ?? $pesanan->notes,        // DITAMBAHKAN
+                'address' => $request->address ?? $pesanan->address,
+                'notes' => $request->notes ?? $pesanan->notes,
                 'estimated_duration' => $estimatedDuration,
             ]);
 
