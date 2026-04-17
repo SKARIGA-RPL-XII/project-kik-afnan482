@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Laporan Keuangan - Laundry System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -34,16 +35,17 @@
 
         <main class="flex-1 overflow-y-auto p-4 lg:p-8">
             
+            <!-- Filter Form -->
             <div class="bg-white rounded-xl shadow-sm p-4 lg:p-6 mb-6">
-                <form action="{{ route('admin.laporan.index') }}" method="GET" class="flex flex-col lg:flex-row lg:items-end gap-4 justify-between">
+                <form id="filterForm" action="{{ route('admin.laporan.index') }}" method="GET" class="flex flex-col lg:flex-row lg:items-end gap-4 justify-between">
                     <div class="flex flex-col lg:flex-row gap-4 flex-1">
                         <div class="flex-1">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Dari Tanggal</label>
-                            <input type="date" name="start_date" value="{{ request('start_date') }}" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                            <input type="date" name="start_date" id="start_date" value="{{ request('start_date', $startDate->format('Y-m-d')) }}" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
                         </div>
                         <div class="flex-1">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Sampai Tanggal</label>
-                            <input type="date" name="end_date" value="{{ request('end_date') }}" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                            <input type="date" name="end_date" id="end_date" value="{{ request('end_date', $endDate->format('Y-m-d')) }}" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
                         </div>
                         <div class="lg:self-end">
                             <button type="submit" class="w-full lg:w-auto bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2">
@@ -58,24 +60,34 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                             Print
                         </button>
-                        <button type="button" class="flex-1 lg:flex-none bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2">
+                        <button type="button" onclick="exportExcel()" class="flex-1 lg:flex-none bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                            Export Excel
+                            Excel
+                        </button>
+                        <button type="button" onclick="exportPdf()" class="flex-1 lg:flex-none bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                            PDF
                         </button>
                     </div>
                 </form>
             </div>
 
+            <!-- Summary Cards -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <div class="flex items-center justify-between mb-4">
                         <div class="bg-blue-100 p-3 rounded-lg text-blue-600">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                         </div>
-                        <span class="text-xs font-semibold text-green-500 bg-green-50 px-2 py-1 rounded-full">+12.5%</span>
+                        @if($growthPercentage != 0)
+                        <span class="text-xs font-semibold {{ $growthPercentage >= 0 ? 'text-green-500 bg-green-50' : 'text-red-500 bg-red-50' }} px-2 py-1 rounded-full">
+                            {{ $growthPercentage >= 0 ? '+' : '' }}{{ number_format($growthPercentage, 1) }}%
+                        </span>
+                        @endif
                     </div>
                     <p class="text-sm text-gray-500">Total Pendapatan</p>
-                    <h3 class="text-2xl font-bold text-gray-800">Rp 4.500.000</h3> </div>
+                    <h3 class="text-2xl font-bold text-gray-800">Rp {{ number_format($totalPendapatan, 0, ',', '.') }}</h3>
+                </div>
 
                 <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <div class="flex items-center justify-between mb-4">
@@ -84,7 +96,7 @@
                         </div>
                     </div>
                     <p class="text-sm text-gray-500">Total Transaksi</p>
-                    <h3 class="text-2xl font-bold text-gray-800">142 Pesanan</h3>
+                    <h3 class="text-2xl font-bold text-gray-800">{{ number_format($totalTransaksi) }} Pesanan</h3>
                 </div>
 
                 <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
@@ -94,7 +106,7 @@
                         </div>
                     </div>
                     <p class="text-sm text-gray-500">Total Berat</p>
-                    <h3 class="text-2xl font-bold text-gray-800">320.5 Kg</h3>
+                    <h3 class="text-2xl font-bold text-gray-800">{{ number_format($totalBerat, 1, ',', '.') }} Kg</h3>
                 </div>
 
                 <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
@@ -104,10 +116,11 @@
                         </div>
                     </div>
                     <p class="text-sm text-gray-500">Rata-rata / Transaksi</p>
-                    <h3 class="text-2xl font-bold text-gray-800">Rp 31.600</h3>
+                    <h3 class="text-2xl font-bold text-gray-800">Rp {{ number_format($rataRataPerTransaksi, 0, ',', '.') }}</h3>
                 </div>
             </div>
 
+            <!-- Charts -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
                 <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <h3 class="text-lg font-bold text-gray-800 mb-4">Grafik Pendapatan Harian</h3>
@@ -123,9 +136,11 @@
                 </div>
             </div>
 
+            <!-- Table -->
             <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
                 <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
                     <h3 class="font-bold text-gray-700">Rincian Transaksi</h3>
+                    <span class="text-sm text-gray-600">{{ $laporans->count() }} transaksi</span>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full">
@@ -143,15 +158,20 @@
                             @forelse($laporans as $row)
                             <tr class="hover:bg-gray-50 transition">
                                 <td class="px-6 py-4 text-sm text-gray-600">{{ $row->created_at->format('d/m/Y') }}</td>
-                                <td class="px-6 py-4 text-sm font-medium text-blue-600">{{ $row->invoice_number }}</td>
+                                <td class="px-6 py-4 text-sm font-medium text-blue-600">{{ $row->invoice }}</td>
                                 <td class="px-6 py-4 text-sm text-gray-800">{{ $row->customer_name }}</td>
-                               <td class="px-6 py-4 text-sm text-gray-600">
+                                <td class="px-6 py-4 text-sm text-gray-600">
                                     <span class="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                        {{ $row->layanan->nama_layanan ?? 'Layanan Terhapus' }}
+                                        {{ $row->layanan->nama_layanan ?? $row->service_type ?? 'Layanan Terhapus' }}
                                     </span>
+                                    @if($row->is_express)
+                                    <span class="ml-1 px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Express</span>
+                                    @endif
                                 </td>
-                                <td class="px-6 py-4 text-sm text-gray-600">{{ $row->final_weight ?? $row->estimated_weight }}</td>
-                                <td class="px-6 py-4 text-sm font-bold text-gray-800">Rp {{ number_format($row->total_price, 0, ',', '.') }}</td>
+                                <td class="px-6 py-4 text-sm text-gray-600">
+                                    {{ number_format($row->final_weight ?? $row->weight, 1, ',', '.') }}
+                                </td>
+                                <td class="px-6 py-4 text-sm font-bold text-gray-800">Rp {{ number_format($row->total, 0, ',', '.') }}</td>
                             </tr>
                             @empty
                             <tr>
@@ -159,10 +179,15 @@
                             </tr>
                             @endforelse
                         </tbody>
+                        @if($laporans->count() > 0)
+                        <tfoot class="bg-gray-50 border-t-2 border-gray-300">
+                            <tr>
+                                <th colspan="5" class="px-6 py-4 text-right text-sm font-bold text-gray-700 uppercase">TOTAL:</th>
+                                <th class="px-6 py-4 text-sm font-bold text-blue-600">Rp {{ number_format($totalPendapatan, 0, ',', '.') }}</th>
+                            </tr>
+                        </tfoot>
+                        @endif
                     </table>
-                </div>
-                <div class="px-6 py-4 border-t border-gray-200">
-                    {{-- {{ $laporans->links() }} --}}
                 </div>
             </div>
 
@@ -170,7 +195,7 @@
     </div>
 
     <script>
-        // Toggle Sidebar Logic (Sama seperti halaman pesanan)
+        // Toggle Sidebar
         function toggleSidebar() {
             const sidebar = document.querySelector('aside');
             const overlay = document.getElementById('overlay');
@@ -183,24 +208,41 @@
             }
         }
 
+        // Print Report
         function printReport() {
-            window.print();
+            const startDate = document.getElementById('start_date').value;
+            const endDate = document.getElementById('end_date').value;
+            const url = `{{ route('admin.laporan.print') }}?start_date=${startDate}&end_date=${endDate}`;
+            window.open(url, '_blank');
         }
 
-        // Inisialisasi Chart.js
-        // NOTE: Di implementasi nyata, data ini diambil dari controller backend Laravel
+        // Export Excel
+        function exportExcel() {
+            const startDate = document.getElementById('start_date').value;
+            const endDate = document.getElementById('end_date').value;
+            window.location.href = `{{ route('admin.laporan.export.excel') }}?start_date=${startDate}&end_date=${endDate}`;
+        }
+
+        // Export PDF
+        function exportPdf() {
+            const startDate = document.getElementById('start_date').value;
+            const endDate = document.getElementById('end_date').value;
+            window.location.href = `{{ route('admin.laporan.export.pdf') }}?start_date=${startDate}&end_date=${endDate}`;
+        }
+
+        // Initialize Charts
         document.addEventListener('DOMContentLoaded', function() {
             
-            // 1. Grafik Pendapatan (Line Chart)
+            // 1. Income Chart (Line)
             const incomeCtx = document.getElementById('incomeChart').getContext('2d');
             new Chart(incomeCtx, {
                 type: 'line',
                 data: {
-                    labels: ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'],
+                    labels: @json($dailyIncome['labels']),
                     datasets: [{
                         label: 'Pendapatan (Rp)',
-                        data: [150000, 230000, 180000, 320000, 290000, 450000, 380000],
-                        borderColor: '#2563EB', // Blue-600
+                        data: @json($dailyIncome['data']),
+                        borderColor: '#2563EB',
                         backgroundColor: 'rgba(37, 99, 235, 0.1)',
                         borderWidth: 2,
                         tension: 0.4,
@@ -214,12 +256,24 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { display: false }
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Rp ' + context.parsed.y.toLocaleString('id-ID');
+                                }
+                            }
+                        }
                     },
                     scales: {
                         y: {
                             beginAtZero: true,
-                            grid: { borderDash: [2, 4] }
+                            grid: { borderDash: [2, 4] },
+                            ticks: {
+                                callback: function(value) {
+                                    return 'Rp ' + (value/1000) + 'k';
+                                }
+                            }
                         },
                         x: {
                             grid: { display: false }
@@ -228,19 +282,20 @@
                 }
             });
 
-            // 2. Grafik Layanan (Doughnut Chart)
+            // 2. Service Chart (Doughnut)
             const serviceCtx = document.getElementById('serviceChart').getContext('2d');
             new Chart(serviceCtx, {
                 type: 'doughnut',
                 data: {
-                    labels: ['Cuci Komplit', 'Cuci Kering', 'Setrika Saja', 'Bed Cover'],
+                    labels: @json($topServices['labels']),
                     datasets: [{
-                        data: [45, 25, 20, 10],
+                        data: @json($topServices['data']),
                         backgroundColor: [
-                            '#3B82F6', // Blue
-                            '#10B981', // Emerald
-                            '#F59E0B', // Amber
-                            '#6366F1'  // Indigo
+                            '#3B82F6',
+                            '#10B981',
+                            '#F59E0B',
+                            '#6366F1',
+                            '#EC4899'
                         ],
                         borderWidth: 0
                     }]

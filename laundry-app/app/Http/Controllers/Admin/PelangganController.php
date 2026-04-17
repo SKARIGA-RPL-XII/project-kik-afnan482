@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use App\Models\User;
 use App\Models\Pesanan;
 
@@ -31,7 +32,9 @@ class PelangganController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'phone' => 'nullable|string|max:20',
-            'alamat' => 'nullable|string|max:255',
+            'alamat' => 'nullable|string|max:500',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
             'password' => 'required|string|min:8|confirmed',
         ]);
 
@@ -40,6 +43,8 @@ class PelangganController extends Controller
             'email' => $request->email,
             'phone' => $request->phone,
             'alamat' => $request->alamat,
+            'latitude' => $request->latitude,
+            'longitude' => $request->longitude,
             'password' => bcrypt($request->password),
             'role' => 'user',
         ]);
@@ -61,11 +66,13 @@ class PelangganController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . $pelanggan->id,
             'phone' => 'nullable|string|max:20',
-            'alamat' => 'nullable|string|max:255',
+            'alamat' => 'nullable|string|max:500',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
             'password' => 'nullable|string|min:8|confirmed',
         ]);
 
-        $data = $request->only('name', 'email', 'phone', 'alamat');
+        $data = $request->only('name', 'email', 'phone', 'alamat', 'latitude', 'longitude');
         
         // Update password hanya jika diisi
         if ($request->filled('password')) {
@@ -133,6 +140,68 @@ class PelangganController extends Controller
                 'success' => false,
                 'message' => 'Gagal memuat riwayat pesanan: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    // Proxy endpoint untuk reverse geocoding (mengatasi CORS)
+    public function reverseGeocode(Request $request)
+    {
+        $request->validate([
+            'lat' => 'required|numeric|between:-90,90',
+            'lng' => 'required|numeric|between:-180,180',
+        ]);
+
+        try {
+            $lat = $request->lat;
+            $lng = $request->lng;
+            
+            // Gunakan cURL untuk request ke Nominatim
+            $url = "https://nominatim.openstreetmap.org/reverse?format=json&lat={$lat}&lon={$lng}&zoom=18&addressdetails=1";
+            
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+            curl_setopt($ch, CURLOPT_USERAGENT, 'LaundryKu App/1.0');
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Accept: application/json',
+                'Accept-Language: id'
+            ]);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+            
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_error($ch);
+            curl_close($ch);
+
+            if ($httpCode === 200 && $response) {
+                $data = json_decode($response, true);
+                return response()->json([
+                    'success' => true,
+                    'address' => $data['display_name'] ?? null,
+                    'data' => $data
+                ]);
+            } else {
+                Log::warning('Geocoding failed', [
+                    'http_code' => $httpCode,
+                    'error' => $error
+                ]);
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Geocoding service unavailable',
+                    'address' => null
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Geocoding exception', [
+                'message' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'address' => null
+            ]);
         }
     }
 }

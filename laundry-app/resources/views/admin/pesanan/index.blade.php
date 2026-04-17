@@ -7,6 +7,13 @@
     <title>Pesanan - Laundry System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Leaflet Geocoder CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+    
     <style>
         .swal2-container.swal2-top-end {
             top: 1rem !important;
@@ -14,6 +21,20 @@
         }
         .swal2-toast {
             padding: 1rem !important;
+        }
+        
+        /* Fix map dalam modal */
+        #adminMap {
+            height: 250px;
+            width: 100%;
+            border-radius: 0.5rem;
+            border: 2px solid #E5E7EB;
+            z-index: 1;
+        }
+        
+        .leaflet-control-geocoder {
+            border-radius: 0.5rem !important;
+            border: 2px solid #3B82F6 !important;
         }
     </style>
 </head>
@@ -114,17 +135,41 @@
                     <label class="block text-sm font-medium text-gray-700 mb-2">No. Telepon <span class="text-red-500">*</span></label>
                     <input type="text" id="customerPhone" name="customer_phone" oninput="this.value=this.value.replace(/[^0-9]/g,'')" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                 </div>
-                <!-- Field Alamat - TAMBAHAN BARU -->
+                
+                <!-- Field Alamat dengan OpenStreetMap -->
                 <div id="addressDiv">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Alamat Penjemputan</label>
-                    <textarea id="address" name="address" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Masukkan alamat lengkap..."></textarea>
+                    
+                    <!-- OpenStreetMap -->
+                    <div class="relative mb-3">
+                        <div id="adminMap"></div>
+                        <button type="button" id="adminUseMyLocation" class="absolute top-2 right-2 bg-white border-2 border-gray-300 rounded-lg p-2 cursor-pointer shadow hover:bg-gray-50 z-[1000]" title="Gunakan lokasi saya">
+                            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Koordinat (hidden) -->
+                    <input type="hidden" id="latitude" name="latitude">
+                    <input type="hidden" id="longitude" name="longitude">
+
+                    <!-- Alamat Lengkap (readonly) -->
+                    <textarea id="address" name="address" rows="2" readonly class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm" placeholder="Klik pada peta untuk menentukan lokasi..."></textarea>
+                    
+                    <p class="text-xs text-gray-500 mt-1">
+                        <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Klik pada peta atau geser marker untuk menentukan lokasi penjemputan
+                    </p>
                 </div>
 
-                <!-- Field Catatan - TAMBAHAN BARU (Letakkan setelah field weight) -->
+                <!-- Field Catatan -->
                 <div id="notesDiv">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Catatan Khusus <span class="text-gray-500 font-normal">(Opsional)</span></label>
                     <textarea id="notes" name="notes" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Catatan untuk pesanan ini..."></textarea>
                 </div>
+                
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Layanan <span class="text-red-500">*</span></label>
                     <select id="layananId" name="layanan_id" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="calculateTotal()" required>
@@ -226,6 +271,12 @@
             </form>
         </div>
     </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Leaflet Geocoder JS -->
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
 
     <!-- Load JavaScript Terpisah -->
     <script src="{{ asset('js/pesanan.js') }}"></script>

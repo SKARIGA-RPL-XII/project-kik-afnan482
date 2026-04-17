@@ -9,69 +9,74 @@ use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
-    /**
-     * Display user dashboard
-     *
-     * @return \Illuminate\Contracts\View\View
-     */
     public function index()
     {
-        // Ambil ID user yang sedang login
         $userId = Auth::guard('web')->id();
-        
-        // --- Hitung Statistik ---
-        
-        // Total semua pesanan user
-        $totalOrders = Pesanan::where('user_id', $userId)->count();
-        
-        // Pesanan yang sedang diproses (pending & proses)
+
+        // Scope: hanya tampilkan pesanan yang valid
+        // Cash selalu tampil, Midtrans hanya jika payment_status sudah paid/pending/success
+        $visible = function ($q) {
+            $q->where(function ($sub) {
+                $sub->where('payment_method', 'cash')
+                    ->orWhereIn('payment_status', ['paid', 'pending', 'success']);
+            });
+        };
+
+        $totalOrders = Pesanan::where('user_id', $userId)
+            ->where($visible)
+            ->count();
+
         $processingOrders = Pesanan::where('user_id', $userId)
             ->whereIn('status', ['pending', 'proses'])
+            ->where($visible)
             ->count();
-        
-        // Pesanan yang sudah selesai dan siap diambil
+
         $readyOrders = Pesanan::where('user_id', $userId)
             ->where('status', 'selesai')
+            ->where($visible)
             ->count();
-        
-        // Total uang yang sudah dikeluarkan (hanya pesanan yang sudah diambil)
+
         $totalSpent = Pesanan::where('user_id', $userId)
             ->where('status', 'diambil')
+            ->where($visible)
             ->sum('total');
-        
-        // --- Siapkan Data untuk Ditampilkan ---
-        
-        // Pesanan aktif (status pending, proses, atau selesai)
+
         $activeOrders = Pesanan::where('user_id', $userId)
             ->whereIn('status', ['pending', 'proses', 'selesai'])
+            ->where($visible)
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($order) {
-                // Tambahkan atribut dinamis untuk memudahkan di view
-                $order->service_name = $this->getServiceName($order->service_type);
-                $order->formatted_weight = number_format($order->weight, 1) . ' kg';
-                $order->formatted_total = 'Rp ' . number_format($order->total, 0, ',', '.');
-                $order->status_label = $this->getStatusLabel($order->status);
-                $order->status_color = $this->getStatusColor($order->status);
+                $order->setAttribute('service_name', $this->getServiceName($order->service_type));
+                $order->setAttribute('formatted_weight', number_format($order->weight, 1) . ' kg');
+                $order->setAttribute('formatted_total', 'Rp ' . number_format($order->total, 0, ',', '.'));
+                $order->setAttribute('status_label', $this->getStatusLabel($order->status));
+                $order->setAttribute('status_color', $this->getStatusColor($order->status));
+
+                $paymentStatus = $order->payment_status ?? 'unpaid';
+                $order->setAttribute('payment_status', $paymentStatus);
+                $order->setAttribute('payment_method', $order->payment_method ?? 'cash');
+                $order->setAttribute('show_payment_status',
+                    $order->payment_method !== 'cash' && !in_array($paymentStatus, ['paid', 'success'])
+                );
+
                 return $order;
             });
-        
-        // Riwayat pesanan (status diambil)
+
         $orderHistory = Pesanan::where('user_id', $userId)
             ->where('status', 'diambil')
             ->orderBy('created_at', 'desc')
+            ->limit(10)
             ->get()
             ->map(function ($order) {
-                // Tambahkan atribut dinamis juga untuk riwayat
-                $order->service_name = $this->getServiceName($order->service_type);
-                $order->formatted_weight = number_format($order->weight, 1) . ' kg';
-                $order->formatted_total = 'Rp ' . number_format($order->total, 0, ',', '.');
-                $order->status_label = $this->getStatusLabel($order->status);
-                $order->status_color = $this->getStatusColor($order->status);
+                $order->setAttribute('service_name', $this->getServiceName($order->service_type));
+                $order->setAttribute('formatted_weight', number_format($order->weight, 1) . ' kg');
+                $order->setAttribute('formatted_total', 'Rp ' . number_format($order->total, 0, ',', '.'));
+                $order->setAttribute('status_label', $this->getStatusLabel($order->status));
+                $order->setAttribute('status_color', $this->getStatusColor($order->status));
                 return $order;
             });
-        
-        // Kirim semua variabel ke view dashboard.blade.php
+
         return view('user.dashboard', compact(
             'totalOrders',
             'processingOrders',
@@ -81,39 +86,28 @@ class DashboardController extends Controller
             'orderHistory'
         ));
     }
-    
-    /**
-     * Helper untuk mengubah nama layanan menjadi Bahasa Indonesia
-     */
+
     private function getServiceName($serviceType)
     {
         $services = [
             'cuci_kering'   => 'Cuci Kering',
-            'cuci_setrika' => 'Cuci & Setrika',
-            'setrika_saja' => 'Setrika Saja',
+            'cuci_setrika'  => 'Cuci & Setrika',
+            'setrika_saja'  => 'Setrika Saja',
         ];
-        
         return $services[$serviceType] ?? $serviceType;
     }
-    
-    /**
-     * Helper untuk mengubah status menjadi label yang lebih mudah dibaca
-     */
+
     private function getStatusLabel($status)
     {
         $labels = [
-            'pending' => 'Menunggu Konfirmasi',
+            'pending' => 'Pesanan Baru',
             'proses'  => 'Sedang Diproses',
             'selesai' => 'Siap Diambil',
             'diambil' => 'Telah Diambil',
         ];
-        
         return $labels[$status] ?? $status;
     }
-    
-    /**
-     * Helper untuk mendapatkan warna badge status
-     */
+
     private function getStatusColor($status)
     {
         $colors = [
@@ -122,7 +116,6 @@ class DashboardController extends Controller
             'selesai' => 'bg-green-100 text-green-800',
             'diambil' => 'bg-gray-100 text-gray-800',
         ];
-        
         return $colors[$status] ?? 'bg-gray-100 text-gray-800';
     }
 }

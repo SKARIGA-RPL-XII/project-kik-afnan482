@@ -8,11 +8,19 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Leaflet Geocoder CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+    
     @if(config('midtrans.is_production'))
         <script src="https://app.midtrans.com/snap/snap.js" data-client-key="{{ config('midtrans.client_key') }}"></script>
     @else
         <script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="{{ config('midtrans.client_key') }}"></script>
     @endif
+    
     <style>
         #successModal {
             display: none;
@@ -47,6 +55,45 @@
         
         body.modal-open {
             overflow: hidden;
+        }
+
+        /* Leaflet Map Styles */
+        #map {
+            height: 300px;
+            width: 100%;
+            border-radius: 0.5rem;
+            border: 2px solid #E5E7EB;
+            z-index: 1;
+        }
+
+        /* Search box styling */
+        .leaflet-control-geocoder {
+            border-radius: 0.5rem !important;
+            border: 2px solid #3B82F6 !important;
+        }
+
+        .leaflet-control-geocoder-form input {
+            border-radius: 0.5rem !important;
+            padding: 8px 12px !important;
+            font-family: inherit !important;
+        }
+
+        /* Location button */
+        .location-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: white;
+            border: 2px solid #E5E7EB;
+            border-radius: 0.5rem;
+            padding: 10px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
+        .location-button:hover {
+            background: #F3F4F6;
         }
 
         /* Sticky summary on desktop */
@@ -94,7 +141,7 @@
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
-    <!-- Navbar -->
+    <!-- Navbar (sama seperti sebelumnya) -->
     <nav class="bg-white shadow-sm sticky top-0 z-50 border-b">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
@@ -123,55 +170,80 @@
                 </div>
 
                 <!-- Right Section -->
-                <div class="flex items-center space-x-3">
-                    <button class="relative p-2 hover:bg-gray-100 rounded-lg transition">
-                        <i class="fas fa-bell text-gray-600"></i>
-                        <span id="notificationBadge" class="hidden absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-                    </button>
+              <!-- Right Section -->
+<div class="flex items-center space-x-3">
+    <button class="relative p-2 hover:bg-gray-100 rounded-lg transition">
+        <i class="fas fa-bell text-gray-600"></i>
+        <span id="notificationBadge" class="hidden absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+    </button>
 
-                    <div class="relative">
-                        <button id="userMenuBtn" class="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 rounded-lg p-2 transition">
-                            <div class="w-9 h-9 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                                {{ substr(auth()->user()->name ?? 'U', 0, 1) }}
-                            </div>
-                            <span class="hidden sm:block text-sm font-medium text-gray-700">{{ auth()->user()->name ?? 'User' }}</span>
-                            <i class="fas fa-chevron-down text-gray-500 text-xs transition-transform" id="dropdownIcon"></i>
-                        </button>
+    <div class="relative">
+        <button id="userMenuBtn" class="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 rounded-lg p-2 transition">
+            @php
+                $profileImageUrl = null;
+                if(auth()->user()->profile_image) {
+                    $imagePath = public_path(auth()->user()->profile_image);
+                    if(file_exists($imagePath)) {
+                        $profileImageUrl = asset(auth()->user()->profile_image) . '?v=' . time();
+                    }
+                }
+            @endphp
 
-                        <div id="userDropdown" class="hidden absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border py-2 z-50">
-                            <div class="px-4 py-3 border-b">
-                                <p class="text-sm font-semibold text-gray-800">{{ auth()->user()->name ?? 'User' }}</p>
-                                <p class="text-xs text-gray-500 mt-1">{{ auth()->user()->email ?? 'user@email.com' }}</p>
-                            </div>
-                            <div class="py-2">
-                                <a href="{{ route('user.profile') }}" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition">
-                                    <i class="fas fa-user-circle w-5 mr-3 text-gray-500"></i>
-                                    Profil Saya
-                                </a>
-                                <a href="#pengaturan" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition">
-                                    <i class="fas fa-cog w-5 mr-3 text-gray-500"></i>
-                                    Pengaturan
-                                </a>
-                            </div>
-                            <div class="border-t pt-2">
-                                <form action="{{ route('logout') }}" method="POST">
-                                    @csrf
-                                    <button type="submit" class="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition">
-                                        <i class="fas fa-sign-out-alt w-5 mr-3"></i>
-                                        Logout
-                                    </button>
-                                </form>
-                            </div>
+            @if($profileImageUrl)
+                <img src="{{ $profileImageUrl }}" 
+                     alt="{{ auth()->user()->name }}"
+                     class="w-9 h-9 rounded-full object-cover border-2 border-blue-200">
+            @else
+                <div class="w-9 h-9 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                    {{ strtoupper(substr(auth()->user()->name ?? 'U', 0, 1)) }}
+                </div>
+            @endif
+            
+            <span class="hidden sm:block text-sm font-medium text-gray-700">{{ auth()->user()->name ?? 'User' }}</span>
+            <i class="fas fa-chevron-down text-gray-500 text-xs transition-transform" id="dropdownIcon"></i>
+        </button>
+
+        <div id="userDropdown" class="hidden absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border py-2 z-50">
+            <div class="px-4 py-3 border-b border-gray-100">
+                <div class="flex items-center space-x-3 mb-2">
+                    @if($profileImageUrl)
+                        <img src="{{ $profileImageUrl }}" 
+                             alt="{{ auth()->user()->name }}"
+                             class="w-12 h-12 rounded-full object-cover border-2 border-blue-200">
+                    @else
+                        <div class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-lg">
+                            {{ strtoupper(substr(auth()->user()->name ?? 'U', 0, 1)) }}
                         </div>
+                    @endif
+                    <div class="flex-1">
+                        <p class="text-sm font-semibold text-gray-800">{{ auth()->user()->name ?? 'User' }}</p>
+                        <p class="text-xs text-gray-500 mt-0.5">{{ auth()->user()->email ?? 'user@email.com' }}</p>
                     </div>
-
-                    <button id="mobileMenuBtn" class="md:hidden p-2 hover:bg-gray-100 rounded-lg transition">
-                        <i class="fas fa-bars text-gray-700"></i>
-                    </button>
                 </div>
             </div>
+            <div class="py-2">
+                <a href="{{ route('user.profile') }}" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 transition">
+                    <i class="fas fa-user-circle w-5 mr-3 text-gray-500"></i>
+                    Profil Saya
+                </a>
+                
+            </div>
+            <div class="border-t border-gray-100 pt-2">
+                <form action="{{ route('logout') }}" method="POST">
+                    @csrf
+                    <button type="submit" class="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition">
+                        <i class="fas fa-sign-out-alt w-5 mr-3"></i>
+                        Logout
+                    </button>
+                </form>
+            </div>
         </div>
+    </div>
 
+    <button id="mobileMenuBtn" class="md:hidden p-2 hover:bg-gray-100 rounded-lg transition">
+        <i class="fas fa-bars text-gray-700"></i>
+    </button>
+</div>
         <!-- Mobile Menu -->
         <div id="mobileMenu" class="hidden md:hidden border-t bg-white">
             <div class="px-4 py-3 space-y-1">
@@ -307,15 +379,40 @@
                         </div>
 
                         <div class="border-t pt-5">
-                            <!-- Alamat -->
+                            <!-- Alamat Penjemputan dengan OpenStreetMap -->
                             <div class="mb-5">
                                 <label class="flex items-center text-sm font-semibold text-gray-800 mb-2">
                                     <i class="fas fa-map-marker-alt text-blue-600 mr-2"></i>
                                     Alamat Penjemputan
                                 </label>
-                                <textarea id="address" name="address" rows="3" 
-                                    class="w-full border-2 border-gray-200 rounded-lg p-3 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 resize-none" 
-                                    placeholder="Masukkan alamat lengkap penjemputan..." required></textarea>
+                                
+                                <!-- OpenStreetMap dengan Leaflet -->
+                                <div class="relative mb-3">
+                                    <div id="map"></div>
+                                    <button type="button" id="useMyLocation" class="location-button" title="Gunakan lokasi saya">
+                                        <i class="fas fa-crosshairs text-blue-600"></i>
+                                    </button>
+                                </div>
+
+                                <!-- Koordinat (hidden) -->
+                                <input type="hidden" id="latitude" name="latitude">
+                                <input type="hidden" id="longitude" name="longitude">
+
+                                <!-- Alamat Lengkap (readonly, akan terisi otomatis) -->
+                                <textarea 
+                                    id="address" 
+                                    name="address" 
+                                    rows="3" 
+                                    readonly
+                                    class="w-full border-2 border-gray-200 rounded-lg p-3 bg-gray-50 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 resize-none" 
+                                    placeholder="Alamat akan muncul di sini setelah Anda memilih lokasi di peta..."
+                                    required
+                                ></textarea>
+                                
+                                <p class="text-xs text-gray-500 mt-2">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    Klik pada peta atau geser marker untuk menentukan lokasi penjemputan
+                                </p>
                             </div>
 
                             <!-- Catatan -->
@@ -326,7 +423,7 @@
                                 </label>
                                 <textarea id="notes" name="notes" rows="3" 
                                     class="w-full border-2 border-gray-200 rounded-lg p-3 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 resize-none" 
-                                    placeholder="Contoh: Pisahkan pakaian putih, jangan gunakan pewangi..."></textarea>
+                                    placeholder="Contoh: Pisahkan pakaian putih, jangan gunakan pewangi, patokan dekat minimarket..."></textarea>
                             </div>
                         </div>
                     </div>
@@ -364,10 +461,9 @@
                 </form>
             </div>
 
-            <!-- Summary Section - Desktop -->
+            <!-- Summary Section - Desktop (sama seperti sebelumnya, skip untuk singkat) -->
             <div class="lg:col-span-1 hidden lg:block">
                 <div class="sticky-summary bg-white rounded-xl border overflow-hidden">
-                    <!-- Header -->
                     <div class="bg-blue-600 p-5 text-white">
                         <h3 class="font-semibold text-lg flex items-center">
                             <i class="fas fa-receipt mr-2"></i>
@@ -376,25 +472,21 @@
                     </div>
 
                     <div class="p-5 space-y-4">
-                        <!-- Service Info -->
                         <div class="space-y-3">
                             <div class="flex justify-between items-start pb-3 border-b">
                                 <span class="text-sm text-gray-600">Layanan:</span>
                                 <span id="summaryService" class="font-semibold text-gray-800 text-right">Pilih layanan</span>
                             </div>
-                            
                             <div class="flex justify-between items-center pb-3 border-b">
                                 <span class="text-sm text-gray-600">Berat:</span>
                                 <span id="summaryWeight" class="font-semibold text-gray-800">1 kg</span>
                             </div>
-                            
                             <div class="flex justify-between items-center pb-3 border-b">
                                 <span class="text-sm text-gray-600">Harga/kg:</span>
                                 <span id="summaryPricePerKg" class="font-semibold text-gray-800">-</span>
                             </div>
                         </div>
 
-                        <!-- Express Info -->
                         <div id="expressInfo" class="hidden">
                             <div class="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-3">
                                 <div class="flex justify-between items-center">
@@ -407,7 +499,6 @@
                             </div>
                         </div>
 
-                        <!-- Calculation -->
                         <div class="space-y-2 bg-gray-50 rounded-lg p-3">
                             <div class="flex justify-between text-sm">
                                 <span class="text-gray-600">Subtotal:</span>
@@ -419,7 +510,6 @@
                             </div>
                         </div>
 
-                        <!-- Total -->
                         <div class="bg-blue-600 rounded-lg p-4">
                             <div class="flex justify-between items-center">
                                 <div>
@@ -430,7 +520,6 @@
                             </div>
                         </div>
 
-                        <!-- Estimated Time -->
                         <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
                             <div class="flex items-start">
                                 <i class="fas fa-clock text-blue-600 mr-2 mt-0.5"></i>
@@ -441,7 +530,6 @@
                             </div>
                         </div>
 
-                        <!-- Info Box -->
                         <div class="bg-green-50 border border-green-200 rounded-lg p-3">
                             <div class="flex items-start">
                                 <i class="fas fa-check-circle text-green-600 mr-2 mt-0.5"></i>
@@ -452,7 +540,6 @@
                             </div>
                         </div>
 
-                        <!-- Submit Button -->
                         <button type="submit" form="orderForm" id="orderBtn" disabled 
                             class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
                             <i class="fas fa-shopping-cart mr-2"></i>
@@ -467,79 +554,9 @@
                 </div>
             </div>
         </div>
-
-        <!-- Mobile Floating Summary -->
-        <div class="lg:hidden mobile-summary bg-white border-t-2 border-blue-600 shadow-lg">
-            <!-- Expandable Summary -->
-            <div class="mobile-summary-detail bg-gray-50">
-                <div class="p-4 space-y-3">
-                    <div class="flex justify-between items-center text-sm">
-                        <span class="text-gray-600">Layanan:</span>
-                        <span id="summaryServiceMobile" class="font-semibold text-gray-800">Pilih layanan</span>
-                    </div>
-                    
-                    <div class="flex justify-between items-center text-sm">
-                        <span class="text-gray-600">Berat:</span>
-                        <span id="summaryWeightMobile" class="font-semibold text-gray-800">1 kg</span>
-                    </div>
-                    
-                    <div class="flex justify-between items-center text-sm">
-                        <span class="text-gray-600">Harga/kg:</span>
-                        <span id="summaryPricePerKgMobile" class="font-semibold text-gray-800">-</span>
-                    </div>
-
-                    <div id="expressInfoMobile" class="hidden bg-yellow-50 border border-yellow-200 rounded-lg p-2">
-                        <div class="flex justify-between items-center text-sm">
-                            <span class="font-semibold text-gray-700">Express:</span>
-                            <span id="summaryExpressMobile" class="font-semibold text-yellow-700">-</span>
-                        </div>
-                    </div>
-
-                    <div class="border-t pt-3 space-y-2">
-                        <div class="flex justify-between text-sm">
-                            <span class="text-gray-600">Subtotal:</span>
-                            <span id="subtotalMobile" class="font-semibold text-gray-800">Rp 0</span>
-                        </div>
-                        <div class="flex justify-between text-sm">
-                            <span class="text-gray-600">Antar-Jemput:</span>
-                            <span class="font-semibold text-gray-800">Rp 5.000</span>
-                        </div>
-                    </div>
-
-                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-2">
-                        <div class="flex items-start text-sm">
-                            <i class="fas fa-clock text-blue-600 mr-2 mt-0.5"></i>
-                            <div>
-                                <p class="font-semibold text-gray-800">Estimasi Selesai</p>
-                                <p id="estimatedTimeMobile" class="text-xs text-gray-600">Pilih layanan terlebih dahulu</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Bottom Bar -->
-            <div class="bg-white p-4">
-                <div class="flex items-center justify-between mb-3">
-                    <button type="button" id="toggleDetailMobile" class="text-sm text-blue-600 font-semibold flex items-center">
-                        <i class="fas fa-chevron-up mr-1" id="chevronIcon"></i>
-                        <span id="toggleText">Lihat Detail</span>
-                    </button>
-                    <div class="text-right">
-                        <p class="text-xs text-gray-500">Total</p>
-                        <p id="totalMobile" class="text-xl font-bold text-blue-600">Rp 0</p>
-                    </div>
-                </div>
-                <button type="submit" form="orderForm" id="orderBtnMobile" disabled 
-                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
-                    <i class="fas fa-shopping-cart mr-2"></i>
-                    <span id="btnTextMobile">Pilih Layanan</span>
-                </button>
-            </div>
-        </div>
     </main>
 
-    <!-- Success Modal -->
+    <!-- Success Modal (sama seperti sebelumnya) -->
     <div id="successModal" class="bg-black/50">
         <div class="modal-content bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
             <div class="bg-green-600 p-6 text-white text-center">
@@ -569,6 +586,13 @@
         </div>
     </div>
 
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Leaflet Geocoder JS -->
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+    
+    <!-- Load main app script -->
     <script src="{{ asset('js/pemesanan.js') }}"></script>
     
 </body>

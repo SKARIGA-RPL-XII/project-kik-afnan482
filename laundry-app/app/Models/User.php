@@ -10,36 +10,16 @@ class User extends Authenticatable
 {
     use HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
     protected $fillable = [
-        'name',
-        'email',
-        'password',
-        'phone',
-        'alamat',
-        'role',
-        'profile_image',
+        'name', 'email', 'password',
+        'phone', 'address', 'latitude', 'longitude',
+        'role', 'profile_image',
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var array<int, string>
-     */
     protected $hidden = [
-        'password',
-        'remember_token',
+        'password', 'remember_token',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
@@ -48,21 +28,13 @@ class User extends Authenticatable
         ];
     }
 
-    /**
-     * Relasi ke tabel pesanans
-     * Satu user bisa memiliki banyak pesanan
-     */
     public function pesanans()
     {
         return $this->hasMany(Pesanan::class, 'user_id');
     }
 
     public function getPhotoUrlAttribute()
-{
-    if ($this->foto) {
-        return asset('storage/' . $this->foto);
+    {
+        return $this->profile_image ? asset('storage/' . $this->profile_image) : null;
     }
-
-    return null;
-}
 }

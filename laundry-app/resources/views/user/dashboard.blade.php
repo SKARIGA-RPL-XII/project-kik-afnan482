@@ -23,6 +23,14 @@
         .modal-content {
             animation: slideUp 0.4s ease-out;
         }
+        
+        .order-card {
+            cursor: pointer;
+        }
+        
+        .order-card:hover {
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -30,17 +38,16 @@
     <nav class="bg-white shadow-sm sticky top-0 z-50 border-b">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
-             
-               <!-- Logo -->
-            <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                    <i class="fas fa-tshirt text-white"></i>
+                <!-- Logo -->
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-tshirt text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-gray-800">LaundryKu</h1>
+                        <p class="text-xs text-gray-500 hidden sm:block">Layanan Laundry Terpercaya</p>
+                    </div>
                 </div>
-                <div>
-                    <h1 class="text-xl font-bold text-gray-800">LaundryKu</h1>
-                    <p class="text-xs text-gray-500 hidden sm:block">Layanan Laundry Terpercaya</p>
-                </div>
-            </div>
 
                 <!-- Desktop Menu -->
                 <div class="hidden md:flex items-center space-x-1">
@@ -50,7 +57,7 @@
                     <a href="{{ route('user.pemesanan.index') }}" class="px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100 font-medium transition">
                         <i class="fas fa-plus-circle mr-2"></i>Pesan Laundry
                     </a>
-                    <a href="#riwayat" class="px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100 font-medium transition">
+                    <a href="{{ route('user.riwayat.index') }}" class="px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100 font-medium transition">
                         <i class="fas fa-history mr-2"></i>Riwayat
                     </a>
                 </div>
@@ -64,27 +71,54 @@
 
                     <div class="relative">
                         <button id="userMenuBtn" class="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 rounded-lg p-2 transition">
-                            <div class="w-9 h-9 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                                {{ substr(auth()->user()->name ?? 'U', 0, 1) }}
-                            </div>
+                            @php
+                                $profileImageUrl = null;
+                                if(auth()->user()->profile_image) {
+                                    $imagePath = public_path(auth()->user()->profile_image);
+                                    if(file_exists($imagePath)) {
+                                        $profileImageUrl = asset(auth()->user()->profile_image) . '?v=' . time();
+                                    }
+                                }
+                            @endphp
+
+                            @if($profileImageUrl)
+                                <img src="{{ $profileImageUrl }}" 
+                                     alt="{{ auth()->user()->name }}"
+                                     class="w-9 h-9 rounded-full object-cover border-2 border-blue-200">
+                            @else
+                                <div class="w-9 h-9 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                                    {{ strtoupper(substr(auth()->user()->name ?? 'U', 0, 1)) }}
+                                </div>
+                            @endif
+                            
                             <span class="hidden sm:block text-sm font-medium text-gray-700">{{ auth()->user()->name ?? 'User' }}</span>
                             <i class="fas fa-chevron-down text-gray-500 text-xs transition-transform" id="dropdownIcon"></i>
                         </button>
 
                         <div id="userDropdown" class="hidden absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border py-2 z-50">
                             <div class="px-4 py-3 border-b border-gray-100">
-                                <p class="text-sm font-semibold text-gray-800">{{ auth()->user()->name ?? 'User' }}</p>
-                                <p class="text-xs text-gray-500 mt-1">{{ auth()->user()->email ?? 'user@email.com' }}</p>
+                                <div class="flex items-center space-x-3 mb-2">
+                                    @if($profileImageUrl)
+                                        <img src="{{ $profileImageUrl }}" 
+                                             alt="{{ auth()->user()->name }}"
+                                             class="w-12 h-12 rounded-full object-cover border-2 border-blue-200">
+                                    @else
+                                        <div class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-lg">
+                                            {{ strtoupper(substr(auth()->user()->name ?? 'U', 0, 1)) }}
+                                        </div>
+                                    @endif
+                                    <div class="flex-1">
+                                        <p class="text-sm font-semibold text-gray-800">{{ auth()->user()->name ?? 'User' }}</p>
+                                        <p class="text-xs text-gray-500 mt-0.5">{{ auth()->user()->email ?? 'user@email.com' }}</p>
+                                    </div>
+                                </div>
                             </div>
                             <div class="py-2">
                                 <a href="{{ route('user.profile') }}" class="flex items-center px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 transition">
                                     <i class="fas fa-user-circle w-5 mr-3 text-gray-500"></i>
                                     Profil Saya
                                 </a>
-                                <a href="#pengaturan" class="flex items-center px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 transition">
-                                    <i class="fas fa-cog w-5 mr-3 text-gray-500"></i>
-                                    Pengaturan
-                                </a>
+                               
                             </div>
                             <div class="border-t border-gray-100 pt-2">
                                 <form action="{{ route('logout') }}" method="POST">
@@ -104,7 +138,7 @@
                 </div>
             </div>
         </div>
-
+        
         <!-- Mobile Menu -->
         <div id="mobileMenu" class="hidden md:hidden border-t bg-white">
             <div class="px-4 py-3 space-y-1">
@@ -117,7 +151,7 @@
                 <a href="#riwayat" class="block px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition">
                     <i class="fas fa-history mr-2"></i>Riwayat
                 </a>
-                <a href="#" class="block px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition">
+                <a href="{{ route('user.profile') }}" class="block px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition">
                     <i class="fas fa-user-circle mr-2"></i>Profil Saya
                 </a>
                 <form action="{{ route('logout') }}" method="POST">
@@ -140,9 +174,25 @@
                     <p class="text-sm text-gray-600">Kelola pesanan laundry Anda dengan mudah dan praktis</p>
                 </div>
                 <div class="hidden sm:block">
-                    <div class="w-16 h-16 bg-blue-50 rounded-lg flex items-center justify-center">
-                        <i class="fas fa-user-circle text-blue-600 text-4xl"></i>
-                    </div>
+                    @php
+                        $profileImageUrl = null;
+                        if(auth()->user()->profile_image) {
+                            $imagePath = public_path(auth()->user()->profile_image);
+                            if(file_exists($imagePath)) {
+                                $profileImageUrl = asset(auth()->user()->profile_image) . '?v=' . time();
+                            }
+                        }
+                    @endphp
+
+                    @if($profileImageUrl)
+                        <img src="{{ $profileImageUrl }}" 
+                             alt="{{ auth()->user()->name }}"
+                             class="w-16 h-16 rounded-lg object-cover border-2 border-blue-200">
+                    @else
+                        <div class="w-16 h-16 bg-blue-50 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-user-circle text-blue-600 text-4xl"></i>
+                        </div>
+                    @endif
                 </div>
             </div>
         </div>
@@ -153,7 +203,7 @@
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-sm text-gray-600 mb-1">Total Pesanan</p>
-                        <p class="text-3xl font-bold text-gray-800">{{ $totalOrders ?? 0 }}</p>
+                        <p class="text-3xl font-bold text-gray-800" data-stat="total-orders">{{ $totalOrders ?? 0 }}</p>
                     </div>
                     <div class="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
                         <i class="fas fa-shopping-bag text-blue-600 text-xl"></i>
@@ -165,7 +215,7 @@
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-sm text-gray-600 mb-1">Sedang Proses</p>
-                        <p class="text-3xl font-bold text-gray-800">{{ $processingOrders ?? 0 }}</p>
+                        <p class="text-3xl font-bold text-gray-800" data-stat="processing-orders">{{ $processingOrders ?? 0 }}</p>
                     </div>
                     <div class="w-12 h-12 bg-yellow-50 rounded-lg flex items-center justify-center">
                         <i class="fas fa-clock text-yellow-600 text-xl"></i>
@@ -177,15 +227,25 @@
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-sm text-gray-600 mb-1">Siap Diambil</p>
-                        <p class="text-3xl font-bold text-gray-800">{{ $readyOrders ?? 0 }}</p>
+                        <p class="text-3xl font-bold text-gray-800" data-stat="ready-orders">{{ $readyOrders ?? 0 }}</p>
                     </div>
                     <div class="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center">
                         <i class="fas fa-check-circle text-green-600 text-xl"></i>
                     </div>
                 </div>
             </div>
-
-         
+            
+            <div class="bg-white rounded-xl border p-5 hover:shadow-md transition">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600 mb-1">Total Belanja</p>
+                        <p class="text-2xl font-bold text-gray-800" data-stat="total-spent">Rp {{ number_format($totalSpent ?? 0, 0, ',', '.') }}</p>
+                    </div>
+                    <div class="w-12 h-12 bg-purple-50 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-money-bill-wave text-purple-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Quick Actions -->
@@ -224,30 +284,46 @@
                 </h3>
                 <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold">{{ $activeOrders->count() ?? 0 }} Pesanan</span>
             </div>
-            <div class="space-y-4">
+            
+            <div id="active-orders-container" class="space-y-4">
                 @if(isset($activeOrders) && $activeOrders->count() > 0)
                     @foreach($activeOrders as $order)
-                        <div class="border rounded-xl p-5 hover:shadow-md hover:border-blue-300 transition">
-                            <div class="flex justify-between items-start mb-4">
+                        @php
+                            // Badge pembayaran tidak perlu ditampilkan karena untuk Midtrans sudah dibayar saat pemesanan
+                            $showPaymentBadge = false;
+                        @endphp
+                        
+                        <div class="order-card border-2 border-gray-200 rounded-xl p-4 md:p-5 hover:shadow-lg hover:border-blue-300 transition transform hover:-translate-y-1" 
+                             data-order-id="{{ $order->id }}"
+                             onclick="viewDetail({{ $order->id }})">
+                            <div class="flex justify-between items-start mb-3 md:mb-4">
                                 <div>
-                                    <p class="font-bold text-lg text-gray-800">{{ $order->invoice }}</p>
-                                    <p class="text-sm text-gray-500 mt-1">{{ $order->created_at->format('d M Y, H:i') }}</p>
+                                    <p class="font-bold text-base md:text-lg text-gray-800">{{ $order->invoice }}</p>
+                                    <p class="text-xs md:text-sm text-gray-500 mt-1">
+                                        <i class="far fa-calendar mr-1"></i>
+                                        {{ $order->created_at->format('d M Y, H:i') }}
+                                    </p>
                                 </div>
-                                <span class="px-3 py-1 rounded-full text-xs font-semibold {{ 
-                                    $order->status == 'pending' ? 'bg-yellow-100 text-yellow-800' : 
-                                    ($order->status == 'proses' ? 'bg-blue-100 text-blue-800' : 
-                                    ($order->status == 'selesai' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'))
-                                }}">
-                                    @if($order->status == 'pending') Menunggu Konfirmasi
-                                    @elseif($order->status == 'proses') Sedang Diproses
-                                    @elseif($order->status == 'selesai') Siap Diambil
-                                    @else {{ ucfirst($order->status) }}
-                                    @endif
-                                </span>
+                                <div class="flex flex-col gap-1">
+                                    {{-- Status Pesanan Badge --}}
+                                    <span class="px-3 py-1 rounded-full text-xs font-semibold {{ 
+                                        $order->status == 'pending' ? 'bg-yellow-100 text-yellow-800' : 
+                                        ($order->status == 'proses' ? 'bg-blue-100 text-blue-800' : 
+                                        ($order->status == 'selesai' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'))
+                                    }}" data-status="{{ $order->status }}">
+                                        <i class="fas fa-{{ $order->status == 'pending' ? 'clock' : ($order->status == 'proses' ? 'sync' : 'check-double') }} mr-1"></i>
+                                        @if($order->status == 'pending') Pesanan Baru
+                                        @elseif($order->status == 'proses') Sedang Diproses
+                                        @elseif($order->status == 'selesai') Siap Diambil
+                                        @else {{ ucfirst($order->status) }}
+                                        @endif
+                                    </span>
+                                </div>
                             </div>
-                            <div class="grid grid-cols-2 gap-4 text-sm mb-4">
+                            
+                            <div class="grid grid-cols-2 gap-3 md:gap-4 text-sm mb-4">
                                 <div class="bg-gray-50 rounded-lg p-3 border">
-                                    <p class="text-xs text-gray-500 mb-1">Layanan</p>
+                                    <p class="text-xs text-gray-500 mb-1"><i class="fas fa-spray-can mr-1"></i>Layanan</p>
                                     <p class="font-semibold text-gray-800">
                                         @if($order->service_type == 'cuci_kering') Cuci Kering
                                         @elseif($order->service_type == 'cuci_setrika') Cuci & Setrika
@@ -257,16 +333,25 @@
                                     </p>
                                 </div>
                                 <div class="bg-gray-50 rounded-lg p-3 border">
-                                    <p class="text-xs text-gray-500 mb-1">Berat</p>
+                                    <p class="text-xs text-gray-500 mb-1"><i class="fas fa-weight mr-1"></i>Berat</p>
                                     <p class="font-semibold text-gray-800">{{ number_format($order->weight, 1) }} kg</p>
                                 </div>
                             </div>
-                            <div class="flex justify-between items-center pt-4 border-t">
+                            
+                            <div class="flex justify-between items-center pt-3 md:pt-4 border-t-2 border-gray-100">
                                 <div>
                                     <p class="text-xs text-gray-500 mb-1">Total Pembayaran</p>
-                                    <p class="font-bold text-xl text-blue-600">Rp {{ number_format($order->total, 0, ',', '.') }}</p>
+                                    <p class="font-bold text-lg md:text-xl text-blue-600">Rp {{ number_format($order->total, 0, ',', '.') }}</p>
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        <i class="fas fa-{{ ($order->payment_method ?? 'cash') == 'midtrans' ? 'credit-card' : 'money-bill-wave' }} mr-1"></i>
+                                        {{ ($order->payment_method ?? 'cash') == 'midtrans' ? 'Online' : 'Tunai' }}
+                                        @if(in_array(($order->payment_status ?? 'unpaid'), ['paid', 'success']))
+                                            <span class="text-green-600 font-semibold">• Lunas</span>
+                                        @endif
+                                    </p>
                                 </div>
-                                <button class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition">
+                                <button onclick="event.stopPropagation(); viewDetail({{ $order->id }})" 
+                                        class="px-4 md:px-6 py-2 md:py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-bold rounded-lg hover:from-blue-700 hover:to-blue-800 transition shadow-md hover:shadow-lg transform hover:scale-105">
                                     <i class="fas fa-eye mr-2"></i>Detail
                                 </button>
                             </div>
@@ -295,7 +380,9 @@
             <div class="space-y-4">
                 @if(isset($orderHistory) && $orderHistory->count() > 0)
                     @foreach($orderHistory as $order)
-                        <div class="border rounded-xl p-5 hover:shadow-md hover:border-purple-300 transition bg-gray-50">
+                        <div class="order-card border rounded-xl p-5 hover:shadow-md hover:border-purple-300 transition bg-gray-50 cursor-pointer"
+                             data-order-id="{{ $order->id }}"
+                             onclick="viewDetail({{ $order->id }})">
                             <div class="flex justify-between items-start mb-4">
                                 <div>
                                     <p class="font-bold text-lg text-gray-800">{{ $order->invoice }}</p>
@@ -321,9 +408,6 @@
                                     <p class="font-semibold text-blue-600">Rp {{ number_format($order->total, 0, ',', '.') }}</p>
                                 </div>
                             </div>
-                            <button onclick="viewDetail({{ $order->id }})" class="text-blue-600 hover:text-blue-800 text-sm font-semibold flex items-center">
-                                Lihat Detail <i class="fas fa-arrow-right ml-2"></i>
-                            </button>
                         </div>
                     @endforeach
                 @else
@@ -355,8 +439,5 @@
     </div>
 
     <script src="{{ asset('js/dashboard.js') }}"></script>
-    <script>
-       
-    </script>
 </body>
 </html>

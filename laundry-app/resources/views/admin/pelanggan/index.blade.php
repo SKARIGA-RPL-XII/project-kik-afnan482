@@ -7,6 +7,16 @@
     <title>Data Pelanggan - Laundry System</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Leaflet Geocoder CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
         .swal2-container.swal2-top-end {
             top: 1rem !important;
@@ -27,6 +37,46 @@
         /* Modal display toggle */
         .modal:not(.hidden) {
             display: flex;
+        }
+        
+        /* Leaflet Map Styles */
+        .map-container {
+            height: 300px;
+            width: 100%;
+            border-radius: 0.5rem;
+            border: 2px solid #E5E7EB;
+            z-index: 1;
+            margin-bottom: 1rem;
+        }
+
+        /* Search box styling */
+        .leaflet-control-geocoder {
+            border-radius: 0.5rem !important;
+            border: 2px solid #3B82F6 !important;
+        }
+
+        .leaflet-control-geocoder-form input {
+            border-radius: 0.5rem !important;
+            padding: 8px 12px !important;
+            font-family: inherit !important;
+        }
+
+        /* Location button */
+        .location-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: white;
+            border: 2px solid #E5E7EB;
+            border-radius: 0.5rem;
+            padding: 10px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
+        .location-button:hover {
+            background: #F3F4F6;
         }
     </style>
 </head>
@@ -86,7 +136,7 @@
                                 </td>
                                 <td class="px-6 py-4 text-sm text-gray-700">{{ $item->email }}</td>
                                 <td class="px-6 py-4 text-sm text-gray-700">{{ $item->phone ?? '-' }}</td>
-                                <td class="px-6 py-4 text-sm text-gray-700">{{ $item->alamat ?? '-' }}</td>
+                                <td class="px-6 py-4 text-sm text-gray-700">{{ Str::limit($item->alamat ?? '-', 30) }}</td>
                                 <td class="px-6 py-4">
                                     <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
                                         {{ $item->pesanans_count ?? 0 }} Pesanan
@@ -159,19 +209,53 @@
 
     <!-- Modal Add -->
     <div id="addModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4 modal" data-modal-type="add">
-        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto no-scrollbar">
+        <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto no-scrollbar">
             <div class="sticky top-0 bg-blue-600 text-white px-6 py-4 flex justify-between items-center rounded-t-xl">
                 <h3 class="text-xl font-bold">Tambah Pelanggan</h3>
                 <button onclick="closeModal('addModal')" class="text-white text-2xl">&times;</button>
             </div>
             <form id="addForm" action="{{ route('admin.pelanggan.store') }}" method="POST" class="p-6 space-y-4">
                 @csrf
-                <div><label class="block text-sm font-medium mb-2">Nama *</label><input type="text" name="name" id="add_name" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div>
-                <div><label class="block text-sm font-medium mb-2">Email *</label><input type="email" name="email" id="add_email" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div>
-                <div><label class="block text-sm font-medium mb-2">Telepon</label><input type="text" name="phone" id="add_phone" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div>
-                <div><label class="block text-sm font-medium mb-2">Alamat</label><textarea name="alamat" id="add_alamat" rows="2" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea></div>
-                <div><label class="block text-sm font-medium mb-2">Password *</label><input type="password" name="password" id="add_password" required minlength="8" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"><p class="text-xs text-gray-500 mt-1">Min 8 karakter</p></div>
-                <div><label class="block text-sm font-medium mb-2">Konfirmasi Password *</label><input type="password" name="password_confirmation" id="add_password_confirmation" required minlength="8" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Nama *</label>
+                    <input type="text" name="name" id="add_name" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Email *</label>
+                    <input type="email" name="email" id="add_email" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Telepon</label>
+                    <input type="text" name="phone" id="add_phone" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                
+                <!-- Map untuk Alamat -->
+                <div>
+                    <label class="block text-sm font-medium mb-2">Alamat dengan Peta</label>
+                    <div class="relative">
+                        <div id="addMap" class="map-container"></div>
+                        <button type="button" id="addUseMyLocation" class="location-button" title="Gunakan lokasi saya">
+                            <i class="fas fa-crosshairs text-blue-600"></i>
+                        </button>
+                    </div>
+                    <input type="hidden" id="add_latitude" name="latitude">
+                    <input type="hidden" id="add_longitude" name="longitude">
+                    <textarea name="alamat" id="add_alamat" rows="2" readonly class="w-full px-4 py-2 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Alamat akan terisi otomatis setelah memilih lokasi di peta"></textarea>
+                    <p class="text-xs text-gray-500 mt-1">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Klik pada peta atau geser marker untuk menentukan lokasi
+                    </p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-2">Password *</label>
+                    <input type="password" name="password" id="add_password" required minlength="8" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">Min 8 karakter</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Konfirmasi Password *</label>
+                    <input type="password" name="password_confirmation" id="add_password_confirmation" required minlength="8" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
                 <div class="flex gap-3 pt-4">
                     <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium">Simpan</button>
                     <button type="button" onclick="closeModal('addModal')" class="flex-1 bg-gray-200 px-4 py-2 rounded-lg hover:bg-gray-300 font-medium">Batal</button>
@@ -193,7 +277,7 @@
 
     <!-- Modal Edit -->
     <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4 modal" data-modal-type="edit">
-        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto no-scrollbar">
+        <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto no-scrollbar">
             <div class="sticky top-0 bg-blue-600 text-white px-6 py-4 flex justify-between items-center rounded-t-xl">
                 <h3 class="text-xl font-bold">Edit Pelanggan</h3>
                 <button onclick="closeModal('editModal')" class="text-white text-2xl">&times;</button>
@@ -201,15 +285,49 @@
             <form id="editForm" method="POST" class="p-6 space-y-4">
                 @csrf 
                 @method('PUT')
-                <div><label class="block text-sm font-medium mb-2">Nama *</label><input type="text" name="name" id="edit_name" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div>
-                <div><label class="block text-sm font-medium mb-2">Email *</label><input type="email" name="email" id="edit_email" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div>
-                <div><label class="block text-sm font-medium mb-2">Telepon</label><input type="text" name="phone" id="edit_phone" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div>
-                <div><label class="block text-sm font-medium mb-2">Alamat</label><textarea name="alamat" id="edit_alamat" rows="2" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea></div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Nama *</label>
+                    <input type="text" name="name" id="edit_name" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Email *</label>
+                    <input type="email" name="email" id="edit_email" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Telepon</label>
+                    <input type="text" name="phone" id="edit_phone" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                
+                <!-- Map untuk Edit Alamat -->
+                <div>
+                    <label class="block text-sm font-medium mb-2">Alamat dengan Peta</label>
+                    <div class="relative">
+                        <div id="editMap" class="map-container"></div>
+                        <button type="button" id="editUseMyLocation" class="location-button" title="Gunakan lokasi saya">
+                            <i class="fas fa-crosshairs text-blue-600"></i>
+                        </button>
+                    </div>
+                    <input type="hidden" id="edit_latitude" name="latitude">
+                    <input type="hidden" id="edit_longitude" name="longitude">
+                    <textarea name="alamat" id="edit_alamat" rows="2" readonly class="w-full px-4 py-2 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Alamat akan terisi otomatis setelah memilih lokasi di peta"></textarea>
+                    <p class="text-xs text-gray-500 mt-1">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Klik pada peta atau geser marker untuk menentukan lokasi
+                    </p>
+                </div>
+                
                 <div class="border-t pt-4">
                     <p class="text-sm text-gray-600 mb-3">Kosongkan jika tidak ingin ubah password</p>
                     <div class="space-y-4">
-                        <div><label class="block text-sm font-medium mb-2">Password Baru</label><input type="password" name="password" id="edit_password" minlength="8" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"><p class="text-xs text-gray-500 mt-1">Min 8 karakter</p></div>
-                        <div><label class="block text-sm font-medium mb-2">Konfirmasi Password</label><input type="password" name="password_confirmation" id="edit_password_confirmation" minlength="8" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Password Baru</label>
+                            <input type="password" name="password" id="edit_password" minlength="8" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Min 8 karakter</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Konfirmasi Password</label>
+                            <input type="password" name="password_confirmation" id="edit_password_confirmation" minlength="8" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
                     </div>
                 </div>
                 <div class="flex gap-3 pt-4">
@@ -258,213 +376,17 @@
         </div>
     </div>
 
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Leaflet Geocoder JS -->
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+    
+    <!-- Custom Pelanggan JS -->
+    <script src="{{ asset('js/pelanggan.js') }}"></script>
+    
+    <!-- Session Messages -->
     <script>
-        const $ = id => document.getElementById(id);
-        
-        function openModal(id) { 
-            $(id).classList.remove('hidden'); 
-            document.body.style.overflow = 'hidden'; 
-        }
-        
-        function closeModal(id) { 
-            $(id).classList.add('hidden'); 
-            document.body.style.overflow = 'auto'; 
-            if(id === 'addModal') {
-                $('addForm').reset();
-            } else if(id === 'editModal') {
-                $('editForm').reset();
-            }
-        }
-
-        function viewDetail(data) {
-            const totalPesanan = data.pesanans_count ?? 0;
-            $('viewContent').innerHTML = `
-                <div class="space-y-4">
-                    <div class="flex items-center pb-4 border-b">
-                        <div class="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-2xl mr-4">
-                            ${data.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                            <h4 class="font-bold text-lg">${data.name}</h4>
-                            <p class="text-sm text-gray-500">${totalPesanan} Total Pesanan</p>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <p class="text-xs text-gray-500">Email</p>
-                            <p class="font-semibold text-sm break-all">${data.email}</p>
-                        </div>
-                        <div>
-                            <p class="text-xs text-gray-500">Telepon</p>
-                            <p class="font-semibold text-sm">${data.phone || '-'}</p>
-                        </div>
-                        <div class="col-span-2">
-                            <p class="text-xs text-gray-500">Alamat</p>
-                            <p class="font-semibold text-sm">${data.alamat || '-'}</p>
-                        </div>
-                    </div>
-                </div>
-            `;
-            openModal('viewModal');
-        }
-
-        function editPelanggan(data) {
-            $('editForm').action = `/admin/pelanggan/${data.id}`;
-            $('edit_name').value = data.name;
-            $('edit_email').value = data.email;
-            $('edit_phone').value = data.phone || '';
-            $('edit_alamat').value = data.alamat || '';
-            $('edit_password').value = '';
-            $('edit_password_confirmation').value = '';
-            openModal('editModal');
-        }
-
-        function deletePelanggan(id, name) {
-            $('deleteForm').action = `/admin/pelanggan/${id}`;
-            $('deleteName').textContent = name;
-            openModal('deleteModal');
-        }
-
-        // Fungsi untuk melihat riwayat pesanan
-        async function viewRiwayat(userId) {
-            openModal('riwayatModal');
-            $('riwayatContent').innerHTML = `
-                <div class="text-center py-8">
-                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-                    <p class="text-gray-500 mt-2">Memuat data...</p>
-                </div>
-            `;
-
-            try {
-                const response = await fetch(`/admin/pelanggan/${userId}/riwayat`, {
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'application/json'
-                    }
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Gagal memuat data');
-                }
-                
-                const data = await response.json();
-
-                if (!data.success) {
-                    throw new Error(data.message || 'Gagal memuat data');
-                }
-
-                const statusColors = {
-                    'pending': 'bg-yellow-100 text-yellow-800',
-                    'proses': 'bg-blue-100 text-blue-800',
-                    'selesai': 'bg-green-100 text-green-800',
-                    'diambil': 'bg-gray-100 text-gray-800'
-                };
-
-                const serviceNames = {
-                    'cuci_kering': 'Cuci Kering',
-                    'cuci_setrika': 'Cuci & Setrika',
-                    'setrika_saja': 'Setrika Saja'
-                };
-
-                $('riwayatPelangganInfo').textContent = `${data.pelanggan.name} - ${data.pelanggan.email}`;
-
-                if (data.pesanan.length === 0) {
-                    $('riwayatContent').innerHTML = `
-                        <div class="text-center py-12">
-                            <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
-                            </svg>
-                            <p class="text-gray-500">Belum ada riwayat pesanan</p>
-                        </div>
-                    `;
-                    return;
-                }
-
-                let html = '<div class="space-y-3">';
-                data.pesanan.forEach(p => {
-                    const serviceName = serviceNames[p.service_type] || p.service_type;
-                    const expressBadge = p.is_express ? '<span class="ml-2 px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded-full text-xs font-semibold">Express</span>' : '';
-                    
-                    html += `
-                        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
-                            <div class="flex justify-between items-start mb-3">
-                                <div>
-                                    <div class="font-bold text-blue-600">${p.invoice}</div>
-                                    <div class="text-xs text-gray-500 mt-1">${p.created_at}</div>
-                                </div>
-                                <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusColors[p.status] || 'bg-gray-100 text-gray-800'}">${p.status.charAt(0).toUpperCase() + p.status.slice(1)}</span>
-                            </div>
-                            <div class="grid grid-cols-2 gap-3 text-sm mb-3">
-                                <div>
-                                    <span class="text-gray-500">Layanan:</span>
-                                    <div class="font-medium">${serviceName}${expressBadge}</div>
-                                </div>
-                                <div>
-                                    <span class="text-gray-500">Berat:</span>
-                                    <div class="font-medium">
-                                        ${parseFloat(p.weight).toFixed(1)} kg (estimasi)
-                                        ${p.final_weight ? `<div class="text-green-600 text-xs">${parseFloat(p.final_weight).toFixed(1)} kg (akhir)</div>` : ''}
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="flex justify-between items-center pt-3 border-t border-gray-100">
-                                <span class="text-gray-500 text-sm">Total:</span>
-                                <span class="font-bold text-blue-600">Rp ${parseFloat(p.total).toLocaleString('id-ID')}</span>
-                            </div>
-                        </div>
-                    `;
-                });
-                html += '</div>';
-
-                $('riwayatContent').innerHTML = html;
-
-            } catch (error) {
-                console.error('Error:', error);
-                $('riwayatContent').innerHTML = `
-                    <div class="text-center py-12">
-                        <svg class="w-16 h-16 mx-auto text-red-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                        <p class="text-red-500">${error.message}</p>
-                    </div>
-                `;
-            }
-        }
-
-        // Form validation
-        $('addForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const p = $('add_password').value;
-            const c = $('add_password_confirmation').value;
-            
-            if(p.length < 8) {
-                Swal.fire({icon:'error', title:'Error', text:'Password minimal 8 karakter'});
-                return false;
-            }
-            if(p !== c) {
-                Swal.fire({icon:'error', title:'Error', text:'Password tidak cocok'});
-                return false;
-            }
-            this.submit();
-        });
-
-        $('editForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const p = $('edit_password').value;
-            const c = $('edit_password_confirmation').value;
-            
-            if(p && p.length < 8) {
-                Swal.fire({icon:'error', title:'Error', text:'Password minimal 8 karakter'});
-                return false;
-            }
-            if(p && p !== c) {
-                Swal.fire({icon:'error', title:'Error', text:'Password tidak cocok'});
-                return false;
-            }
-            this.submit();
-        });
-
-        // Show success/error messages
         @if(session('success'))
         Swal.fire({
             icon: 'success',
@@ -486,6 +408,7 @@
         });
         @endif
     </script>
+    
     @stack('scripts')
 </body>
 </html>

@@ -73,54 +73,51 @@ class AuthController extends Controller
     | PROSES REGISTER
     |--------------------------------------------------------------------------
     */
-    public function register(Request $request)
-    {
-        // Validasi dengan custom error messages
-        $request->validate([
-            'name'     => ['required', 'string', 'max:100'],
-            'email'    => ['required', 'email', 'unique:users,email'],
-            'phone'    => ['nullable', 'string', 'max:20', 'unique:users,phone'],
-            'password' => ['required', 'min:6', 'confirmed'],
-        ], [
-            // Custom error messages dalam Bahasa Indonesia
-            'name.required' => 'Nama lengkap wajib diisi.',
-            'name.max' => 'Nama lengkap maksimal 100 karakter.',
-            
-            'email.required' => 'Email wajib diisi.',
-            'email.email' => 'Format email tidak valid.',
-            'email.unique' => 'Email sudah terdaftar. Silakan gunakan email lain atau login.',
-            
-            'phone.unique' => 'Nomor telepon sudah terdaftar. Silakan gunakan nomor lain.',
-            'phone.max' => 'Nomor telepon maksimal 20 digit.',
-            
-            'password.required' => 'Password wajib diisi.',
-            'password.min' => 'Password minimal 6 karakter.',
-            'password.confirmed' => 'Konfirmasi password tidak cocok.',
+   public function register(Request $request)
+{
+    $request->validate([
+        'name'     => ['required', 'string', 'max:100'],
+        'email'    => ['required', 'email', 'unique:users,email'],
+        'phone'    => ['nullable', 'string', 'max:20', 'unique:users,phone'],
+        'address'  => ['nullable', 'string', 'max:500'],
+        'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+        'longitude'=> ['nullable', 'numeric', 'between:-180,180'],
+        'password' => ['required', 'min:6', 'confirmed'],
+    ], [
+        'name.required'     => 'Nama lengkap wajib diisi.',
+        'name.max'          => 'Nama lengkap maksimal 100 karakter.',
+        'email.required'    => 'Email wajib diisi.',
+        'email.email'       => 'Format email tidak valid.',
+        'email.unique'      => 'Email sudah terdaftar. Silakan gunakan email lain atau login.',
+        'phone.unique'      => 'Nomor telepon sudah terdaftar.',
+        'phone.max'         => 'Nomor telepon maksimal 20 digit.',
+        'password.required' => 'Password wajib diisi.',
+        'password.min'      => 'Password minimal 6 karakter.',
+        'password.confirmed'=> 'Konfirmasi password tidak cocok.',
+    ]);
+
+    try {
+        User::create([
+            'name'      => $request->name,
+            'email'     => $request->email,
+            'phone'     => $request->phone,
+            'address'   => $request->address,
+            'latitude'  => $request->latitude,
+            'longitude' => $request->longitude,
+            'password'  => Hash::make($request->password),
+            'role'      => 'user',
         ]);
 
-        try {
-            // Buat user baru
-            User::create([
-                'name'     => $request->name,
-                'email'    => $request->email,
-                'phone'    => $request->phone,
-                'password' => Hash::make($request->password),
-                'role'     => 'user',
-            ]);
+        return redirect()
+            ->route('login')
+            ->with('success', 'Registrasi berhasil! Silakan login dengan akun Anda.');
 
-            // Redirect ke login dengan pesan sukses
-            return redirect()
-                ->route('login')
-                ->with('success', 'Registrasi berhasil! Silakan login dengan akun Anda.');
-
-        } catch (\Exception $e) {
-            // Jika terjadi error saat menyimpan ke database
-            return back()
-                ->with('error', 'Terjadi kesalahan saat mendaftar. Silakan coba lagi.')
-                ->withInput();
-        }
+    } catch (\Exception $e) {
+        return back()
+            ->with('error', 'Terjadi kesalahan saat mendaftar. Silakan coba lagi.')
+            ->withInput();
     }
-
+}
     /*
     |--------------------------------------------------------------------------
     | LOGOUT

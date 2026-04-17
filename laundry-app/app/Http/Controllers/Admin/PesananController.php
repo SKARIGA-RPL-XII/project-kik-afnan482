@@ -21,7 +21,10 @@ class PesananController extends Controller
 
     public function getData(Request $request)
     {
-        $query = Pesanan::with(['user', 'layanan'])->orderBy('created_at', 'desc');
+        // PERBAIKAN: Exclude pending_payment orders - they haven't been paid yet
+        $query = Pesanan::with(['user', 'layanan'])
+            ->where('status', '!=', 'pending_payment') // Hanya tampilkan yang sudah bayar/confirmed
+            ->orderBy('created_at', 'desc');
 
         if ($request->search) {
             $query->where(function($q) use ($request) {
@@ -58,6 +61,8 @@ class PesananController extends Controller
                 'subtotal' => $item->subtotal,
                 'total' => $item->total,
                 'address' => $item->address,
+                'latitude' => $item->latitude,
+                'longitude' => $item->longitude,
                 'notes' => $item->notes,
                 'payment_method' => $item->payment_method,
                 'status' => $item->status,
@@ -78,6 +83,8 @@ class PesananController extends Controller
             'is_express' => 'nullable|boolean',
             'status' => 'required|in:pending,proses,selesai,diambil',
             'address' => 'nullable|string|max:500',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
             'notes' => 'nullable|string|max:500',
             'payment_method' => 'nullable|in:cash,transfer,ewallet',
         ]);
@@ -100,7 +107,6 @@ class PesananController extends Controller
             $baseDuration = $layanan->estimasi_hari ?? 3;
             $estimatedDuration = $isExpress ? '1 hari (24 jam)' : $baseDuration . ' hari';
 
-            // PERBAIKAN: Gunakan Auth facade untuk mendapatkan user ID yang terautentikasi
             $userId = Auth::check() ? Auth::id() : null;
 
             $pesanan = Pesanan::create([
@@ -118,8 +124,11 @@ class PesananController extends Controller
                 'subtotal' => $subtotal,
                 'total' => $total,
                 'address' => $request->address ?? 'Walk-in',
+                'latitude' => $request->latitude,
+                'longitude' => $request->longitude,
                 'notes' => $request->notes,
                 'payment_method' => $request->payment_method ?? 'cash',
+                'payment_status' => 'success', // Admin buat langsung sukses
                 'status' => $request->status,
                 'estimated_duration' => $estimatedDuration,
             ]);
@@ -139,6 +148,8 @@ class PesananController extends Controller
             'weight' => 'required|numeric|min:0.1',
             'final_weight' => 'nullable|numeric|min:0.1',
             'address' => 'nullable|string|max:500',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
             'notes' => 'nullable|string|max:500',
         ]);
 
@@ -151,7 +162,7 @@ class PesananController extends Controller
             $layanan = Layanan::findOrFail($request->layanan_id);
 
             $pricePerKg = $layanan->tarif;
-            $expressFee = $pesanan->express_fee; // Gunakan express fee yang sudah ada
+            $expressFee = $pesanan->express_fee;
             $deliveryFee = 5000;
             
             $weightForCalc = $request->final_weight ?? $request->weight;
@@ -172,6 +183,8 @@ class PesananController extends Controller
                 'subtotal' => $subtotal,
                 'total' => $total,
                 'address' => $request->address ?? $pesanan->address,
+                'latitude' => $request->latitude ?? $pesanan->latitude,
+                'longitude' => $request->longitude ?? $pesanan->longitude,
                 'notes' => $request->notes ?? $pesanan->notes,
                 'estimated_duration' => $estimatedDuration,
             ]);
@@ -184,7 +197,9 @@ class PesananController extends Controller
 
     public function updateStatus(Request $request, $id)
     {
-        $validator = Validator::make($request->all(), ['status' => 'required|in:pending,proses,selesai,diambil']);
+        $validator = Validator::make($request->all(), [
+            'status' => 'required|in:pending,proses,selesai,diambil'
+        ]);
 
         if ($validator->fails()) {
             return response()->json(['success' => false, 'message' => 'Validasi gagal', 'errors' => $validator->errors()], 422);
@@ -211,7 +226,6 @@ class PesananController extends Controller
             $pesanan = Pesanan::findOrFail($id);
             $finalWeight = $request->final_weight;
             
-            // Hitung ulang dengan express fee jika ada
             $subtotal = ($pesanan->price_per_kg * $finalWeight) + ($pesanan->express_fee * $finalWeight);
             $total = $subtotal + $pesanan->delivery_fee;
 

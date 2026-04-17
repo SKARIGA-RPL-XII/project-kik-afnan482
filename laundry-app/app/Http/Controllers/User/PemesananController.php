@@ -32,6 +32,8 @@ class PemesananController extends Controller
             'weight'         => 'required|numeric|min:1|max:50',
             'is_express'     => 'nullable|boolean',
             'address'        => 'required|string|max:500',
+            'latitude'       => 'nullable|numeric|between:-90,90',
+            'longitude'      => 'nullable|numeric|between:-180,180',
             'notes'          => 'nullable|string|max:500',
             'payment_method' => 'required|in:midtrans,cash',
         ]);
@@ -73,6 +75,15 @@ class PemesananController extends Controller
             $invoice = Pesanan::generateInvoice();
             $orderId = 'LDRY-' . time() . '-' . uniqid();
 
+            // PERBAIKAN: Set status dan payment_status berdasarkan metode pembayaran
+            $orderStatus = 'pending';  // Default status untuk semua pesanan baru
+            $paymentStatus = 'pending'; // Default payment status
+            
+            // Untuk cash payment, langsung set payment_status = 'unpaid'
+            if ($request->payment_method === 'cash') {
+                $paymentStatus = 'unpaid'; // Belum dibayar, akan dibayar saat pengambilan
+            }
+
             $pesanan = Pesanan::create([
                 'invoice'            => $invoice,
                 'order_id'           => $orderId,
@@ -89,10 +100,12 @@ class PemesananController extends Controller
                 'subtotal'           => $subtotal,
                 'total'              => $total,
                 'address'            => $request->address,
+                'latitude'           => $request->latitude,
+                'longitude'          => $request->longitude,
                 'notes'              => $request->notes,
                 'payment_method'     => $request->payment_method,
-                'status'             => 'pending',
-                'payment_status'     => 'pending',
+                'status'             => $orderStatus,
+                'payment_status'     => $paymentStatus,
                 'estimated_duration' => $estimatedDuration,
             ]);
 
@@ -170,14 +183,19 @@ class PemesananController extends Controller
                         'error_detail' => $e->getMessage()
                     ], 500);
                 }
-            } else {
-                // Untuk cash payment, langsung set status confirmed
-                $pesanan->update([
-                    'status' => 'confirmed',
-                ]);
             }
+            // PERBAIKAN: Untuk cash payment, tidak perlu update status lagi
+            // Karena sudah diset saat create pesanan di atas
 
             DB::commit();
+
+            Log::info('Order Created Successfully', [
+                'order_id' => $orderId,
+                'invoice' => $invoice,
+                'payment_method' => $request->payment_method,
+                'status' => $orderStatus,
+                'payment_status' => $paymentStatus
+            ]);
 
             // Return response dengan payment_method
             return response()->json([
@@ -188,7 +206,7 @@ class PemesananController extends Controller
                     'invoice'        => $invoice,
                     'order_id'       => $orderId,
                     'total'          => $total,
-                    'payment_method' => $request->payment_method, // PENTING: Tambahkan ini
+                    'payment_method' => $request->payment_method,
                     'snap_token'     => $snapToken,
                 ]
             ], 201);
@@ -204,6 +222,53 @@ class PemesananController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal membuat pesanan: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Cancel order (untuk handle pembatalan dari Midtrans)
+     */
+    public function cancel($id)
+    {
+        try {
+            $userId = Auth::guard('web')->id();
+            
+            $pesanan = Pesanan::where('id', $id)
+                ->where('user_id', $userId)
+                ->firstOrFail();
+
+            // Hanya bisa cancel jika masih pending
+            if ($pesanan->status === 'pending' && in_array($pesanan->payment_status, ['pending', 'unpaid'])) {
+                $pesanan->update([
+                    'status' => 'cancelled',
+                    'payment_status' => 'failed',
+                ]);
+
+                Log::info('Order cancelled by user', [
+                    'order_id' => $pesanan->order_id,
+                    'invoice' => $pesanan->invoice
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Pesanan berhasil dibatalkan'
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Pesanan tidak dapat dibatalkan'
+            ], 400);
+
+        } catch (\Exception $e) {
+            Log::error('Cancel Order Error', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal membatalkan pesanan'
             ], 500);
         }
     }
@@ -241,17 +306,28 @@ class PemesananController extends Controller
     /**
      * Riwayat (VIEW)
      */
-    public function riwayat()
-    {
-        $userId = Auth::guard('web')->id();
+   /**
+ * Riwayat (VIEW)
+ */
+public function riwayat(Request $request)
+{
+    $userId = Auth::guard('web')->id();
 
-        $pesanans = Pesanan::with('layanan')
-            ->where('user_id', $userId)
-            ->latest()
-            ->get();
+    $query = Pesanan::where('user_id', $userId)
+        ->orderBy('created_at', 'desc');
 
-        return view('user.riwayat.index', compact('pesanans'));
+    if ($request->filled('status')) {
+        $query->where('status', $request->status);
     }
+
+    if ($request->filled('search')) {
+        $query->where('invoice', 'like', '%' . $request->search . '%');
+    }
+
+    $pesanans = $query->paginate(10)->withQueryString();
+
+    return view('user.riwayat.index', compact('pesanans'));
+}
 
     /**
      * Callback Midtrans (Notification Handler)
@@ -309,14 +385,14 @@ class PemesananController extends Controller
                 if ($fraudStatus == 'accept') {
                     $pesanan->update([
                         'payment_status' => 'success',
-                        'status' => 'confirmed',
+                        'status' => 'processing', // PERBAIKAN: Gunakan status yang valid
                         'paid_at' => now(),
                     ]);
                 }
             } elseif ($transactionStatus == 'settlement') {
                 $pesanan->update([
                     'payment_status' => 'success',
-                    'status' => 'confirmed',
+                    'status' => 'processing', // PERBAIKAN: Gunakan status yang valid
                     'paid_at' => now(),
                 ]);
             } elseif ($transactionStatus == 'pending') {

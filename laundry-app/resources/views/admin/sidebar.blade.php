@@ -12,22 +12,23 @@
 <aside id="sidebar" class="fixed lg:sticky lg:top-0 inset-y-0 left-0 transform -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out z-40 w-64 bg-gradient-to-b from-blue-600 to-blue-700 text-white lg:h-screen flex-shrink-0">
     <div class="h-full flex flex-col">
         <!-- Header Section (Fixed - No Scroll) -->
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
         <div class="p-6 flex-shrink-0">
             <!-- Close Button (Mobile Only) -->
-            <button id="closeSidebar" class="lg:hidden absolute top-4 right-4 text-white">
+            <button id="closeSidebar" class="lg:hidden absolute top-4 right-4 text-white hover:text-blue-100 transition">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                 </svg>
             </button>
 
-            <!-- Logo - Updated to match dashboard.blade.php -->
+            <!-- Logo - With t-shirt icon inside white box -->
             <div class="flex items-center space-x-3 mb-8">
-                <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg">
-                    <i class="fas fa-tshirt text-blue-600"></i>
+                <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-lg">
+                    <i class="fas fa-tshirt text-blue-600 text-lg"></i>
                 </div>
                 <div>
-                    <h1 class="font-bold text-lg">LaundryKu</h1>
-                    <p class="text-xs text-blue-200">Admin Panel</p>
+                    <h1 class="text-xl font-bold text-white">LaundryKu</h1>
+                    <p class="text-xs text-blue-100">Layanan Laundry Terpercaya</p>
                 </div>
             </div>
         </div>
@@ -68,7 +69,7 @@
 
         <!-- Logout Button at Bottom (Fixed - No Scroll) -->
         <div class="p-6 flex-shrink-0 border-t border-white border-opacity-20">
-            <button id="logoutBtn" type="button" class="w-full flex items-center space-x-3 px-4 py-3 bg-red-500 hover:bg-red-600 rounded-lg transition text-white font-medium">
+            <button id="logoutBtn" type="button" class="w-full flex items-center space-x-3 px-4 py-3 bg-red-500 hover:bg-red-600 rounded-lg transition text-white font-medium shadow-lg">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
                 </svg>
@@ -113,14 +114,13 @@
                     text: "Sesi Anda akan diakhiri.",
                     icon: "warning",
                     showCancelButton: true,
-                    confirmButtonColor: "#ef4444", // Warna merah tailwind
-                    cancelButtonColor: "#6b7280", // Warna abu-abu tailwind
+                    confirmButtonColor: "#ef4444",
+                    cancelButtonColor: "#6b7280",
                     confirmButtonText: "Ya, Logout!",
                     cancelButtonText: "Batal",
                     reverseButtons: true
                 }).then((result) => {
                     if (result.isConfirmed) {
-                        // Langsung submit form tanpa menunggu alert kedua agar lebih responsif
                         logoutForm.submit();
                     }
                 });
