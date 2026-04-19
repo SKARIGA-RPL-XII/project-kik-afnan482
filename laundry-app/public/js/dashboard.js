@@ -1,285 +1,298 @@
 // ============================================
 // DASHBOARD REAL-TIME MONITORING SYSTEM
-// Version 3.2 - Fixed: Filter midtrans unpaid orders
+// Version 4.0 - Fixed Real-Time + 10s Polling
 // ============================================
 
-let refreshInterval;
+let refreshInterval = null;
 let lastOrderStates = {};
-let notificationSound;
+let audioContext = null;
 let isMonitoring = false;
 let apiAvailable = true;
+let audioUnlocked = false;
+let isFetching = false;
 
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 Dashboard Real-time Monitoring v3.2 initialized');
-
+document.addEventListener('DOMContentLoaded', function () {
+    console.log('Dashboard v4.0 initialized');
     initializeOrderStates();
-    setupNotificationSound();
+    setupAudioContext();
     setupUserMenuToggle();
     setupMobileMenu();
     setupScrollFunctions();
-    setupDetailButtonHandlers();
 
-    setTimeout(() => {
-        checkApiAvailability();
-    }, 2000);
+    // Mulai monitoring langsung tanpa delay cek API dulu
+    startRealTimeMonitoring();
 });
 
 // ============================================
-// FILTER: Hanya tampilkan pesanan yang valid
-// Cash selalu tampil, Midtrans hanya jika sudah paid/pending/success
+// AUDIO
 // ============================================
 
-function isOrderVisible(order) {
-    if (!order.payment_method || order.payment_method === 'cash') return true;
-    return ['paid', 'pending', 'success'].includes(order.payment_status);
+function setupAudioContext() {
+    try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+        audioContext = null;
+        return;
+    }
+
+    const unlockAudio = () => {
+        if (audioUnlocked) return;
+        if (audioContext.state === 'suspended') {
+            audioContext.resume().then(() => { audioUnlocked = true; });
+        } else {
+            audioUnlocked = true;
+        }
+        document.removeEventListener('click', unlockAudio);
+        document.removeEventListener('touchstart', unlockAudio);
+    };
+
+    document.addEventListener('click', unlockAudio);
+    document.addEventListener('touchstart', unlockAudio);
 }
 
-// ============================================
-// API AVAILABILITY CHECK
-// ============================================
+function playNotificationSound() {
+    if (!audioContext) return;
 
-function checkApiAvailability() {
-    console.log('🔍 Checking API availability...');
+    const resume = audioContext.state === 'suspended'
+        ? audioContext.resume()
+        : Promise.resolve();
 
-    fetch('/api/user/orders-status', {
-        method: 'GET',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
-        },
-        credentials: 'same-origin'
-    })
-    .then(response => {
-        if (response.status === 404) {
-            apiAvailable = false;
-            console.warn('⚠️ API endpoint not available. Real-time monitoring disabled.');
-            return null;
+    resume.then(() => {
+        try {
+            const now = audioContext.currentTime;
+
+            const o1 = audioContext.createOscillator();
+            const g1 = audioContext.createGain();
+            o1.connect(g1); g1.connect(audioContext.destination);
+            o1.type = 'sine'; o1.frequency.value = 880;
+            g1.gain.setValueAtTime(0.3, now);
+            g1.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+            o1.start(now); o1.stop(now + 0.25);
+
+            const o2 = audioContext.createOscillator();
+            const g2 = audioContext.createGain();
+            o2.connect(g2); g2.connect(audioContext.destination);
+            o2.type = 'sine'; o2.frequency.value = 1100;
+            g2.gain.setValueAtTime(0.3, now + 0.3);
+            g2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+            o2.start(now + 0.3); o2.stop(now + 0.55);
+        } catch (e) {
+            console.error('Sound error:', e);
         }
-        apiAvailable = true;
-        return response.json();
-    })
-    .then(data => {
-        if (data && apiAvailable) {
-            console.log('✅ API is available. Starting real-time monitoring...');
-            startRealTimeMonitoring();
-        }
-    })
-    .catch(error => {
-        console.error('❌ API check failed:', error);
-        apiAvailable = false;
     });
 }
 
 // ============================================
-// REAL-TIME MONITORING CORE
+// FILTER pesanan valid
+// ============================================
+
+function isOrderVisible(order) {
+    // Cash selalu tampil
+    if (!order.payment_method || order.payment_method === 'cash') return true;
+    // Midtrans: sembunyikan jika payment_status masih 'unpaid' (belum mulai bayar)
+    if (order.payment_method === 'midtrans') return order.payment_status !== 'unpaid';
+    return true;
+}
+
+// ============================================
+// MONITORING — start/stop/fetch
 // ============================================
 
 function startRealTimeMonitoring() {
-    if (!apiAvailable || isMonitoring) return;
+    if (isMonitoring) return;
 
-    console.log('⏰ Starting real-time monitoring...');
     isMonitoring = true;
 
+    // Fetch pertama langsung
     fetchOrderUpdates();
+
+    // Lalu setiap 10 detik
     refreshInterval = setInterval(fetchOrderUpdates, 10000);
+
     showMonitoringStatus();
+    console.log('Real-time monitoring started (10s interval)');
 }
 
 function stopRealTimeMonitoring() {
     if (refreshInterval) {
         clearInterval(refreshInterval);
         refreshInterval = null;
-        isMonitoring = false;
-        console.log('⏹️ Real-time monitoring stopped');
     }
+    isMonitoring = false;
 }
 
 function fetchOrderUpdates() {
-    if (!apiAvailable) return;
+    // Hindari request tumpang tindih
+    if (isFetching) return;
+    isFetching = true;
 
     fetch('/api/user/orders-status', {
-        method: 'GET',
         headers: {
-            'Content-Type': 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
         },
         credentials: 'same-origin'
     })
-    .then(response => {
-        if (!response.ok) {
-            if (response.status === 404) {
-                apiAvailable = false;
-                stopRealTimeMonitoring();
-            }
-            throw new Error(`HTTP error! status: ${response.status}`);
+    .then(res => {
+        if (res.status === 404) {
+            // API belum tersedia, hentikan monitoring
+            apiAvailable = false;
+            stopRealTimeMonitoring();
+            console.warn('API /api/user/orders-status tidak ditemukan (404). Monitoring dihentikan.');
+            return null;
         }
-        return response.json();
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        apiAvailable = true;
+        return res.json();
     })
     .then(data => {
-        if (data.success && data.data) {
+        if (data && data.success && Array.isArray(data.data)) {
             processOrderUpdates(data.data);
         }
     })
-    .catch(error => console.error('❌ Error fetching updates:', error));
+    .catch(err => {
+        console.error('Fetch error:', err.message);
+    })
+    .finally(() => {
+        isFetching = false;
+    });
 }
+
+// ============================================
+// PROSES UPDATE — deteksi perubahan status
+// ============================================
 
 function processOrderUpdates(orders) {
     let hasChanges = false;
 
     orders.forEach(order => {
-        const orderId = order.id;
-        const currentStatus = order.status;
-        const currentPaymentStatus = order.payment_status || 'unpaid';
-        const previousState = lastOrderStates[orderId];
+        const orderId        = String(order.id);
+        const currentStatus  = order.status;
+        const currentPayment = order.payment_status || 'unpaid';
+        const prev           = lastOrderStates[orderId];
 
-        if (previousState) {
-            if (previousState.status !== currentStatus) {
+        if (prev) {
+            if (prev.status !== currentStatus) {
                 hasChanges = true;
-                showStatusChangeNotification(order, previousState.status, currentStatus);
+                showStatusNotif(order, prev.status, currentStatus);
                 playNotificationSound();
                 updateNotificationBadge();
+                console.log('Status berubah:', order.invoice, prev.status, '->', currentStatus);
             }
-            if (previousState.payment_status !== currentPaymentStatus) {
+            if (prev.payment_status !== currentPayment) {
                 hasChanges = true;
-                showPaymentStatusNotification(order, previousState.payment_status, currentPaymentStatus);
+                showPaymentNotif(order, prev.payment_status, currentPayment);
                 playNotificationSound();
                 updateNotificationBadge();
+                console.log('Payment berubah:', order.invoice, prev.payment_status, '->', currentPayment);
             }
         }
 
+        // Simpan state terbaru
         lastOrderStates[orderId] = {
-            status: currentStatus,
-            payment_status: currentPaymentStatus,
-            invoice: order.invoice,
-            timestamp: Date.now()
+            status:         currentStatus,
+            payment_status: currentPayment,
+            invoice:        order.invoice
         };
     });
 
     updateDashboardUI(orders);
-
-    if (hasChanges) setupDetailButtonHandlers();
 }
 
 // ============================================
-// NOTIFICATION SYSTEM
+// NOTIFIKASI TOAST
 // ============================================
 
-function showStatusChangeNotification(order, oldStatus, newStatus) {
-    const statusMessages = {
-        'pending': 'Pesanan Baru',
-        'proses':  'Sedang Diproses',
-        'selesai': 'Siap Diambil',
-        'diambil': 'Sudah Diambil'
-    };
-    const statusEmojis = { 'pending': '⏳', 'proses': '🧺', 'selesai': '✨', 'diambil': '📦' };
-
+function showStatusNotif(order, oldStatus, newStatus) {
     if (typeof Swal === 'undefined') return;
 
+    const labels = { pending: 'Pending', proses: 'Proses', selesai: 'Selesai', diambil: 'Diambil' };
+    const emojis  = { pending: '⏳', proses: '🧺', selesai: '✨', diambil: '📦' };
+
     Swal.mixin({
-        toast: true, position: 'top-end', showConfirmButton: false,
-        timer: 5000, timerProgressBar: true,
-        didOpen: (toast) => {
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 5000,
+        timerProgressBar: true,
+        didOpen: toast => {
             toast.addEventListener('mouseenter', Swal.stopTimer);
             toast.addEventListener('mouseleave', Swal.resumeTimer);
         }
     }).fire({
         icon: 'info',
-        title: `${statusEmojis[newStatus]} Status Update`,
-        html: `<div class="text-left"><p class="font-bold text-gray-800">${order.invoice}</p>
-               <p class="text-sm text-gray-600 mt-1">${statusMessages[oldStatus]} → ${statusMessages[newStatus]}</p></div>`
+        title: (emojis[newStatus] || '') + ' Status Pesanan Diperbarui',
+        html: '<p style="font-weight:bold;color:#1f2937">' + escapeHtml(order.invoice) + '</p>' +
+              '<p style="font-size:13px;color:#6b7280;margin-top:4px">' +
+              (labels[oldStatus] || oldStatus) + ' &rarr; <strong>' +
+              (labels[newStatus] || newStatus) + '</strong></p>'
     });
 }
 
-function showPaymentStatusNotification(order, oldPaymentStatus, newPaymentStatus) {
-    const paymentMessages = {
-        'unpaid': 'Belum Dibayar', 'pending': 'Belum Dibayar',
-        'paid': 'Sudah Dibayar', 'success': 'Pembayaran Berhasil',
-        'failed': 'Pembayaran Gagal', 'expired': 'Pembayaran Kadaluarsa'
-    };
-    const paymentEmojis = {
-        'unpaid': '⏳', 'pending': '💳', 'paid': '✅',
-        'success': '✅', 'failed': '❌', 'expired': '⏰'
-    };
-
+function showPaymentNotif(order, oldStatus, newStatus) {
     if (typeof Swal === 'undefined') return;
 
+    const labels = {
+        unpaid: 'Belum Dibayar', pending: 'Menunggu Pembayaran',
+        paid: 'Lunas', success: 'Pembayaran Berhasil',
+        failed: 'Gagal', expired: 'Kadaluarsa'
+    };
+    const emojis = { unpaid: '⏳', pending: '💳', paid: '✅', success: '✅', failed: '❌', expired: '⏰' };
+
     Swal.mixin({
-        toast: true, position: 'top-end', showConfirmButton: false, timer: 5000, timerProgressBar: true
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 5000,
+        timerProgressBar: true
     }).fire({
-        icon: ['paid', 'success'].includes(newPaymentStatus) ? 'success' : 'info',
-        title: `${paymentEmojis[newPaymentStatus]} Status Pembayaran`,
-        html: `<div class="text-left"><p class="font-bold text-gray-800">${order.invoice}</p>
-               <p class="text-sm text-gray-600 mt-1">${paymentMessages[oldPaymentStatus]} → ${paymentMessages[newPaymentStatus]}</p></div>`
+        icon: ['paid', 'success'].includes(newStatus) ? 'success' : 'info',
+        title: (emojis[newStatus] || '') + ' Status Pembayaran',
+        html: '<p style="font-weight:bold;color:#1f2937">' + escapeHtml(order.invoice) + '</p>' +
+              '<p style="font-size:13px;color:#6b7280;margin-top:4px">' +
+              (labels[oldStatus] || oldStatus) + ' &rarr; <strong>' +
+              (labels[newStatus] || newStatus) + '</strong></p>'
     });
-}
-
-function playNotificationSound() {
-    if (notificationSound) notificationSound.play().catch(() => {});
-}
-
-function setupNotificationSound() {
-    try {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        notificationSound = {
-            play: function() {
-                return new Promise((resolve, reject) => {
-                    try {
-                        const oscillator = audioContext.createOscillator();
-                        const gainNode = audioContext.createGain();
-                        oscillator.connect(gainNode);
-                        gainNode.connect(audioContext.destination);
-                        oscillator.frequency.value = 800;
-                        oscillator.type = 'sine';
-                        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-                        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-                        oscillator.start(audioContext.currentTime);
-                        oscillator.stop(audioContext.currentTime + 0.5);
-                        resolve();
-                    } catch (error) { reject(error); }
-                });
-            }
-        };
-    } catch (error) {
-        notificationSound = null;
-    }
 }
 
 function updateNotificationBadge() {
     const badge = document.getElementById('notificationBadge');
     if (badge) {
         badge.classList.remove('hidden');
-        setTimeout(() => badge.classList.add('hidden'), 3000);
+        setTimeout(() => badge.classList.add('hidden'), 5000);
     }
 }
 
 // ============================================
-// UI UPDATE FUNCTIONS
+// UI UPDATE — update kartu & stat
 // ============================================
 
 function updateDashboardUI(orders) {
-    // Filter: hanya hitung & tampilkan pesanan yang valid
-    const visibleOrders = orders.filter(isOrderVisible);
+    const visible = orders.filter(isOrderVisible);
 
-    updateStatCard('total-orders', visibleOrders.length);
-    updateStatCard('processing-orders',
-        visibleOrders.filter(o => ['pending', 'proses'].includes(o.status)).length);
-    updateStatCard('ready-orders',
-        visibleOrders.filter(o => o.status === 'selesai').length);
-    updateStatCard('total-spent',
-        `Rp ${formatNumber(visibleOrders.reduce((s, o) => s + parseFloat(o.total || 0), 0))}`);
+    // Update stat cards
+    updateStatCard('pending-orders', visible.filter(o => o.status === 'pending').length);
+    updateStatCard('proses-orders',  visible.filter(o => o.status === 'proses').length);
+    updateStatCard('selesai-orders', visible.filter(o => o.status === 'selesai').length);
+    updateStatCard('diambil-orders', visible.filter(o => o.status === 'diambil').length);
 
-    const activeOrders = visibleOrders.filter(o => !['diambil', 'cancelled'].includes(o.status));
+    // Active orders = semua kecuali cancelled, tampilkan semua status
+    const activeOrders = visible.filter(o => o.status !== 'cancelled');
     updateActiveOrdersSection(activeOrders);
+
+    // Update counter badge di header "Pesanan Aktif"
+    const badge = document.querySelector('.active-orders-count');
+    if (badge) badge.textContent = activeOrders.length + ' Pesanan';
 }
 
 function updateStatCard(statType, value) {
-    const element = document.querySelector(`[data-stat="${statType}"]`);
-    if (element && element.textContent.trim() !== value.toString()) {
-        element.classList.add('scale-110', 'text-blue-600');
-        element.textContent = value;
-        setTimeout(() => element.classList.remove('scale-110', 'text-blue-600'), 500);
+    const el = document.querySelector('[data-stat="' + statType + '"]');
+    if (!el) return;
+    const current = parseInt(el.textContent.trim(), 10);
+    if (current !== value) {
+        el.textContent = value;
+        el.classList.add('scale-110', 'text-blue-600');
+        setTimeout(() => el.classList.remove('scale-110', 'text-blue-600'), 500);
     }
 }
 
@@ -288,303 +301,227 @@ function updateActiveOrdersSection(activeOrders) {
     if (!container) return;
 
     if (activeOrders.length === 0) {
-        container.innerHTML = `
-            <div class="text-center py-12 md:py-16">
-                <i class="fas fa-inbox text-gray-300 text-5xl md:text-6xl mb-4"></i>
-                <p class="text-gray-500 text-base md:text-lg mb-4 font-medium">Belum ada pesanan aktif</p>
-                <a href="/user/pemesanan" class="inline-block px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold rounded-lg hover:from-blue-700 hover:to-blue-800 transition shadow-lg transform hover:scale-105">
-                    <i class="fas fa-plus-circle mr-2"></i>Buat Pesanan Baru
-                </a>
-            </div>`;
+        container.innerHTML =
+            '<div class="text-center py-16">' +
+            '<i class="fas fa-inbox text-gray-300 text-6xl mb-4"></i>' +
+            '<p class="text-gray-500 text-lg mb-4 font-medium">Belum ada pesanan aktif</p>' +
+            '<a href="/user/pemesanan" class="inline-block px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition">' +
+            '<i class="fas fa-plus-circle mr-2"></i>Buat Pesanan Baru</a></div>';
         return;
     }
 
-    container.innerHTML = activeOrders.map(order => createOrderCard(order)).join('');
-    setupDetailButtonHandlers();
+    // Hanya re-render jika ada perbedaan agar tidak flicker
+    const currentIds = Array.from(container.querySelectorAll('[data-order-id]'))
+        .map(el => el.dataset.orderId).sort().join(',');
+    const newIds = activeOrders.map(o => String(o.id)).sort().join(',');
+
+    if (currentIds !== newIds) {
+        // Ada pesanan baru/hilang — render ulang semua
+        container.innerHTML = activeOrders.map(order => createOrderCard(order)).join('');
+    } else {
+        // Update status setiap kartu yang berubah saja
+        activeOrders.forEach(order => {
+            const card = container.querySelector('[data-order-id="' + order.id + '"]');
+            if (!card) return;
+
+            const prevStatus = card.dataset.status;
+            if (prevStatus !== order.status) {
+                // Ganti kartu ini saja
+                card.outerHTML = createOrderCard(order);
+            }
+        });
+    }
 }
+
+// ============================================
+// ORDER CARD HTML BUILDER
+// ============================================
+
+const SERVICE_LABELS = {
+    'cuci_kering':  'Cuci Kering',
+    'cuci_setrika': 'Cuci & Setrika',
+    'setrika_saja': 'Setrika Saja'
+};
+
+const STATUS_CFG = {
+    pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Pending',  icon: 'clock' },
+    proses:  { bg: 'bg-blue-100',   text: 'text-blue-800',   label: 'Proses',   icon: 'sync' },
+    selesai: { bg: 'bg-green-100',  text: 'text-green-800',  label: 'Selesai',  icon: 'check-double' },
+    diambil: { bg: 'bg-gray-100',   text: 'text-gray-800',   label: 'Diambil',  icon: 'box' }
+};
 
 function createOrderCard(order) {
-    const statusConfig = {
-        'pending': { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Pesanan Baru', icon: 'clock' },
-        'proses':  { bg: 'bg-blue-100',   text: 'text-blue-800',   label: 'Sedang Diproses',    icon: 'sync' },
-        'selesai': { bg: 'bg-green-100',  text: 'text-green-800',  label: 'Siap Diambil',        icon: 'check-double' }
-    };
-    const paymentStatusConfig = {
-        'unpaid':  { bg: 'bg-red-100',    text: 'text-red-700',    label: 'Belum Bayar',    icon: 'exclamation-circle' },
-        'pending': { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Belum Bayar',       icon: 'clock' },
-        'paid':    { bg: 'bg-green-100',  text: 'text-green-700',  label: 'Lunas',          icon: 'check-circle' },
-        'success': { bg: 'bg-green-100',  text: 'text-green-700',  label: 'Lunas',          icon: 'check-circle' }
-    };
+    const s           = STATUS_CFG[order.status] || STATUS_CFG['pending'];
+    const isPaid      = ['paid', 'success'].includes(order.payment_status);
+    const methodIcon  = order.payment_method === 'midtrans' ? 'credit-card' : 'money-bill-wave';
+    const methodLabel = order.payment_method === 'midtrans' ? 'Online' : 'Tunai';
+    const serviceName = SERVICE_LABELS[order.service_type] || order.service_type;
 
-    const status = statusConfig[order.status] || statusConfig['pending'];
-    const paymentStatus = paymentStatusConfig[order.payment_status || 'unpaid'];
-    const isPaidOrSuccess = ['paid', 'success'].includes(order.payment_status);
-    const showPaymentStatus = false;
-    const paymentMethodIcon  = order.payment_method === 'midtrans' ? 'credit-card' : 'money-bill-wave';
-    const paymentMethodLabel = order.payment_method === 'midtrans' ? 'Online' : 'Tunai';
+    return '<div class="order-card border-2 border-gray-200 rounded-xl p-4 md:p-5 hover:shadow-lg hover:border-blue-300 transition transform hover:-translate-y-1 cursor-pointer"' +
+        ' data-order-id="' + order.id + '"' +
+        ' data-status="' + escapeAttr(order.status) + '"' +
+        ' data-payment-status="' + escapeAttr(order.payment_status || 'unpaid') + '"' +
+        ' onclick="viewDetail(' + order.id + ')">' +
 
-    return `
-        <div class="border-2 border-gray-200 rounded-xl p-4 md:p-5 hover:shadow-lg hover:border-blue-300 transition transform hover:-translate-y-1 cursor-pointer order-card"
-             data-order-id="${order.id}" onclick="viewDetail(${order.id})">
-            <div class="flex justify-between items-start mb-3 md:mb-4">
-                <div>
-                    <p class="font-bold text-base md:text-lg text-gray-800">${order.invoice}</p>
-                    <p class="text-xs md:text-sm text-gray-500 mt-1">
-                        <i class="far fa-calendar mr-1"></i>${formatDate(order.created_at)}
-                    </p>
-                </div>
-                <div class="flex flex-col gap-1">
-                    <span class="px-3 py-1.5 rounded-full text-xs font-bold ${status.bg} ${status.text}" data-status="${order.status}">
-                        <i class="fas fa-${status.icon} mr-1"></i>${status.label}
-                    </span>
-                    ${showPaymentStatus ? `
-                    <span class="px-3 py-1.5 rounded-full text-xs font-bold ${paymentStatus.bg} ${paymentStatus.text}" data-payment-status="${order.payment_status}">
-                        <i class="fas fa-${paymentStatus.icon} mr-1"></i>${paymentStatus.label}
-                    </span>` : ''}
-                </div>
-            </div>
+        '<div class="flex justify-between items-start mb-3 md:mb-4">' +
+        '<div>' +
+        '<p class="font-bold text-base md:text-lg text-gray-800">' + escapeHtml(order.invoice) + '</p>' +
+        '<p class="text-xs md:text-sm text-gray-500 mt-1"><i class="far fa-calendar mr-1"></i>' + formatDate(order.created_at) + '</p>' +
+        '</div>' +
+        '<span class="px-3 py-1.5 rounded-full text-xs font-bold ' + s.bg + ' ' + s.text + '">' +
+        '<i class="fas fa-' + s.icon + ' mr-1"></i>' + s.label + '</span>' +
+        '</div>' +
 
-            <div class="grid grid-cols-2 gap-3 md:gap-4 text-sm mb-4">
-                <div class="bg-gray-50 rounded-lg p-3">
-                    <p class="text-xs text-gray-500 mb-1"><i class="fas fa-spray-can mr-1"></i>Layanan</p>
-                    <p class="font-bold text-gray-800">${order.service_type}</p>
-                </div>
-                <div class="bg-gray-50 rounded-lg p-3">
-                    <p class="text-xs text-gray-500 mb-1"><i class="fas fa-weight mr-1"></i>Berat</p>
-                    <p class="font-bold text-gray-800">${order.weight} kg</p>
-                </div>
-            </div>
+        '<div class="grid grid-cols-2 gap-3 md:gap-4 text-sm mb-4">' +
+        '<div class="bg-gray-50 rounded-lg p-3 border">' +
+        '<p class="text-xs text-gray-500 mb-1"><i class="fas fa-spray-can mr-1"></i>Layanan</p>' +
+        '<p class="font-semibold text-gray-800">' + escapeHtml(serviceName) + '</p></div>' +
+        '<div class="bg-gray-50 rounded-lg p-3 border">' +
+        '<p class="text-xs text-gray-500 mb-1"><i class="fas fa-weight mr-1"></i>Berat</p>' +
+        '<p class="font-semibold text-gray-800">' + parseFloat(order.weight).toFixed(1) + ' kg</p></div>' +
+        '</div>' +
 
-            ${order.is_express ? `
-            <div class="mb-3 bg-yellow-50 border border-yellow-200 rounded-lg p-2">
-                <p class="text-xs text-yellow-800 font-semibold">
-                    <i class="fas fa-bolt text-yellow-600 mr-1"></i>Layanan Express (24 Jam)
-                </p>
-            </div>` : ''}
+        (order.is_express
+            ? '<div class="mb-3 bg-yellow-50 border border-yellow-200 rounded-lg p-2">' +
+              '<p class="text-xs text-yellow-800 font-semibold"><i class="fas fa-bolt text-yellow-600 mr-1"></i>Layanan Express (24 Jam)</p></div>'
+            : '') +
 
-            <div class="flex justify-between items-center pt-3 md:pt-4 border-t-2 border-gray-100">
-                <div>
-                    <p class="text-xs text-gray-500 mb-1">Total Pembayaran</p>
-                    <p class="font-bold text-lg md:text-xl text-blue-600">Rp ${formatNumber(order.total)}</p>
-                    <p class="text-xs text-gray-500 mt-1">
-                        <i class="fas fa-${paymentMethodIcon} mr-1"></i>${paymentMethodLabel}
-                        ${isPaidOrSuccess ? '<span class="text-green-600 font-semibold ml-1">• Lunas</span>' : ''}
-                    </p>
-                </div>
-                <button onclick="event.stopPropagation(); viewDetail(${order.id})"
-                        class="detail-btn px-4 md:px-6 py-2 md:py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-bold rounded-lg hover:from-blue-700 hover:to-blue-800 transition shadow-md hover:shadow-lg transform hover:scale-105">
-                    <i class="fas fa-eye mr-2"></i>Detail
-                </button>
-            </div>
-
-        </div>`;
+        '<div class="flex justify-between items-center pt-3 md:pt-4 border-t-2 border-gray-100">' +
+        '<div>' +
+        '<p class="text-xs text-gray-500 mb-1">Total Pembayaran</p>' +
+        '<p class="font-bold text-lg md:text-xl text-blue-600">Rp ' + formatNumber(order.total) + '</p>' +
+        '<p class="text-xs text-gray-500 mt-1"><i class="fas fa-' + methodIcon + ' mr-1"></i>' + methodLabel +
+        (isPaid ? ' <span class="text-green-600 font-semibold">• Lunas</span>' : '') + '</p>' +
+        '</div>' +
+        '<button onclick="event.stopPropagation(); viewDetail(' + order.id + ')" ' +
+        'class="detail-btn px-4 md:px-6 py-2 md:py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-bold rounded-lg hover:from-blue-700 hover:to-blue-800 transition shadow-md">' +
+        '<i class="fas fa-eye mr-2"></i>Detail</button>' +
+        '</div></div>';
 }
 
 // ============================================
-// DETAIL BUTTON HANDLERS
-// ============================================
-
-function setupDetailButtonHandlers() {
-    document.querySelectorAll('.detail-btn, .order-card').forEach(el => {
-        el.style.cursor = 'pointer';
-    });
-}
-
-// ============================================
-// PAYMENT FUNCTIONS
-// ============================================
-
-function continuePayment(snapToken, invoice) {
-    if (typeof window.snap === 'undefined') {
-        Swal.fire({
-            icon: 'error', title: 'Midtrans Tidak Tersedia',
-            text: 'Sistem pembayaran tidak dapat dimuat. Silakan refresh halaman.',
-            confirmButtonColor: '#3B82F6'
-        });
-        return;
-    }
-
-    window.snap.pay(snapToken, {
-        onSuccess: function(result) {
-            Swal.fire({
-                icon: 'success', title: 'Pembayaran Berhasil!',
-                html: `<p>Pesanan <strong>${invoice}</strong> telah dibayar.</p>`,
-                confirmButtonColor: '#10B981'
-            }).then(() => fetchOrderUpdates());
-        },
-        onPending: function(result) {
-            Swal.fire({
-                icon: 'info', title: 'Belum Dibayar',
-                html: `<p>Pembayaran <strong>${invoice}</strong> sedang diproses.</p>`,
-                confirmButtonColor: '#3B82F6'
-            });
-        },
-        onError: function(result) {
-            Swal.fire({
-                icon: 'error', title: 'Pembayaran Gagal',
-                text: result.status_message || 'Terjadi kesalahan',
-                confirmButtonColor: '#EF4444'
-            });
-        }
-    });
-}
-
-// ============================================
-// VIEW DETAIL MODAL
+// DETAIL MODAL
 // ============================================
 
 function viewDetail(orderId) {
-    const modal = document.getElementById('detailModal');
+    const modal   = document.getElementById('detailModal');
     const content = document.getElementById('detailContent');
     if (!modal || !content) return;
 
     modal.classList.remove('hidden');
     modal.classList.add('flex');
+    content.innerHTML =
+        '<div class="text-center py-8">' +
+        '<i class="fas fa-spinner fa-spin text-blue-600 text-4xl mb-2"></i>' +
+        '<p class="text-gray-600">Memuat data...</p></div>';
 
-    content.innerHTML = `
-        <div class="text-center py-8">
-            <i class="fas fa-spinner fa-spin text-blue-600 text-4xl mb-2"></i>
-            <p class="text-gray-600">Memuat data...</p>
-        </div>`;
-
-    if (!apiAvailable) {
-        content.innerHTML = `
-            <div class="text-center py-8 text-yellow-600">
-                <i class="fas fa-exclamation-triangle text-4xl mb-2"></i>
-                <p class="font-semibold">API Belum Tersedia</p>
-            </div>`;
-        return;
-    }
-
-    fetch(`/api/user/orders/${orderId}`, {
+    fetch('/api/user/orders/' + orderId, {
         headers: {
             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
             'X-Requested-With': 'XMLHttpRequest'
-        }
+        },
+        credentials: 'same-origin'
     })
-    .then(response => {
-        if (!response.ok) throw new Error('Failed to fetch order details');
-        return response.json();
+    .then(res => {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
     })
     .then(data => {
-        if (data.success && data.data) content.innerHTML = createDetailModalContent(data.data);
-        else throw new Error(data.message || 'Failed to load');
+        if (data.success && data.data) {
+            content.innerHTML = createDetailModalContent(data.data);
+        } else {
+            throw new Error(data.message || 'Gagal memuat data');
+        }
     })
-    .catch(error => {
-        content.innerHTML = `
-            <div class="text-center py-8 text-red-600">
-                <i class="fas fa-exclamation-circle text-4xl mb-2"></i>
-                <p class="font-semibold">Gagal memuat detail pesanan</p>
-                <p class="text-sm text-gray-600">${error.message}</p>
-            </div>`;
+    .catch(err => {
+        content.innerHTML =
+            '<div class="text-center py-8 text-red-600">' +
+            '<i class="fas fa-exclamation-circle text-4xl mb-2"></i>' +
+            '<p class="font-semibold">Gagal memuat detail pesanan</p>' +
+            '<p class="text-sm text-gray-500 mt-1">' + escapeHtml(err.message) + '</p></div>';
     });
 }
 
 function createDetailModalContent(order) {
-    const statusConfig = {
-        'pending': { icon: 'clock',        color: 'yellow', label: 'Pesanan Baru' },
-        'proses':  { icon: 'sync',         color: 'blue',   label: 'Sedang Diproses' },
-        'selesai': { icon: 'check-double', color: 'green',  label: 'Siap Diambil' },
-        'diambil': { icon: 'box',          color: 'gray',   label: 'Sudah Diambil' }
-    };
-    const paymentStatusConfig = {
-        'unpaid':  { color: 'red',    label: 'Belum Dibayar',        icon: 'exclamation-circle' },
-        'pending': { color: 'yellow', label: 'Belum Dibayar',  icon: 'clock' },
-        'paid':    { color: 'green',  label: 'Sudah Dibayar',        icon: 'check-circle' },
-        'success': { color: 'green',  label: 'Pembayaran Berhasil',  icon: 'check-circle' }
-    };
+    const s           = STATUS_CFG[order.status] || STATUS_CFG['pending'];
+    const isPaid      = ['paid', 'success'].includes(order.payment_status);
+    const methodIcon  = order.payment_method === 'midtrans' ? 'credit-card' : 'money-bill-wave';
+    const methodLabel = order.payment_method === 'midtrans' ? 'Pembayaran Online' : 'Bayar Tunai';
+    const serviceName = SERVICE_LABELS[order.service_type] || order.service_type;
 
-    const status = statusConfig[order.status] || statusConfig['pending'];
-    const paymentStatus = paymentStatusConfig[order.payment_status || 'unpaid'];
-    const isPaidOrSuccess = ['paid', 'success'].includes(order.payment_status);
-    const showPaymentStatus = false;
-    const paymentMethodIcon  = order.payment_method === 'midtrans' ? 'credit-card' : 'money-bill-wave';
-    const paymentMethodLabel = order.payment_method === 'midtrans' ? 'Pembayaran Online' : 'Bayar Tunai';
+    const colorMap = { yellow: 'yellow', blue: 'blue', green: 'green', gray: 'gray' };
+    const c = colorMap[s.text.replace('text-', '').replace('-800', '')] || 'gray';
 
-    return `
-        <div class="space-y-6">
-            <div class="grid grid-cols-1 ${showPaymentStatus ? 'md:grid-cols-2' : ''} gap-3">
-                <div class="text-center bg-${status.color}-50 rounded-xl p-4 border-2 border-${status.color}-200">
-                    <i class="fas fa-${status.icon} text-${status.color}-600 text-3xl mb-2"></i>
-                    <p class="font-bold text-${status.color}-800">${status.label}</p>
-                    <p class="text-xs text-${status.color}-600 mt-1">Status Pesanan</p>
-                </div>
-                ${showPaymentStatus ? `
-                <div class="text-center bg-${paymentStatus.color}-50 rounded-xl p-4 border-2 border-${paymentStatus.color}-200">
-                    <i class="fas fa-${paymentStatus.icon} text-${paymentStatus.color}-600 text-3xl mb-2"></i>
-                    <p class="font-bold text-${paymentStatus.color}-800">${paymentStatus.label}</p>
-                    <p class="text-xs text-${paymentStatus.color}-600 mt-1">Status Pembayaran</p>
-                </div>` : ''}
-            </div>
+    return '<div class="space-y-6">' +
 
-            <div class="text-center bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl p-4">
-                <p class="text-sm text-gray-600 mb-1">Nomor Invoice</p>
-                <p class="text-2xl font-bold text-gray-800">${order.invoice}</p>
-            </div>
+        '<div class="text-center bg-' + c + '-50 rounded-xl p-4 border-2 border-' + c + '-200">' +
+        '<i class="fas fa-' + s.icon + ' text-' + c + '-600 text-3xl mb-2"></i>' +
+        '<p class="font-bold text-' + c + '-800 text-lg">' + s.label + '</p>' +
+        '<p class="text-xs text-' + c + '-600 mt-1">Status Pesanan</p></div>' +
 
-            <div class="space-y-3">
-                <div class="flex justify-between py-3 border-b">
-                    <span class="text-gray-600"><i class="fas fa-spray-can mr-2 text-blue-600"></i>Layanan:</span>
-                    <span class="font-bold text-gray-800">${order.service_type}</span>
-                </div>
-                <div class="flex justify-between py-3 border-b">
-                    <span class="text-gray-600"><i class="fas fa-weight mr-2 text-blue-600"></i>Berat:</span>
-                    <span class="font-bold text-gray-800">${order.weight} kg</span>
-                </div>
-                ${order.is_express ? `
-                <div class="flex justify-between py-3 border-b">
-                    <span class="text-gray-600"><i class="fas fa-bolt mr-2 text-yellow-600"></i>Express:</span>
-                    <span class="font-bold text-yellow-600">24 Jam</span>
-                </div>` : ''}
-                <div class="flex justify-between py-3 border-b">
-                    <span class="text-gray-600"><i class="fas fa-${paymentMethodIcon} mr-2 text-blue-600"></i>Pembayaran:</span>
-                    <span class="font-bold text-gray-800">
-                        ${paymentMethodLabel}
-                        ${isPaidOrSuccess ? '<span class="text-green-600 ml-2">✓ Lunas</span>' : ''}
-                    </span>
-                </div>
-                <div class="flex justify-between py-3 border-b">
-                    <span class="text-gray-600"><i class="fas fa-map-marker-alt mr-2 text-blue-600"></i>Alamat:</span>
-                    <span class="font-semibold text-gray-800 text-right max-w-xs">${order.address || '-'}</span>
-                </div>
-                ${order.notes ? `
-                <div class="py-3 border-b">
-                    <p class="text-gray-600 mb-2"><i class="fas fa-sticky-note mr-2 text-blue-600"></i>Catatan:</p>
-                    <p class="font-semibold text-gray-800 bg-gray-50 rounded p-2">${order.notes}</p>
-                </div>` : ''}
-                <div class="flex justify-between py-3 border-b">
-                    <span class="text-gray-600"><i class="far fa-calendar mr-2 text-blue-600"></i>Tanggal Pesan:</span>
-                    <span class="font-semibold text-gray-800">${formatDate(order.created_at)}</span>
-                </div>
-            </div>
+        '<div class="text-center bg-blue-50 rounded-xl p-4">' +
+        '<p class="text-sm text-gray-600 mb-1">Nomor Invoice</p>' +
+        '<p class="text-2xl font-bold text-gray-800">' + escapeHtml(order.invoice) + '</p></div>' +
 
-            <div class="bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl p-4 space-y-2">
-                <div class="flex justify-between text-sm">
-                    <span class="text-gray-600">Subtotal:</span>
-                    <span class="font-semibold">Rp ${formatNumber(order.subtotal || order.total)}</span>
-                </div>
-                ${order.delivery_fee ? `
-                <div class="flex justify-between text-sm">
-                    <span class="text-gray-600">Biaya Antar-Jemput:</span>
-                    <span class="font-semibold">Rp ${formatNumber(order.delivery_fee)}</span>
-                </div>` : ''}
-                ${order.is_express ? `
-                <div class="flex justify-between text-sm">
-                    <span class="text-gray-600">Biaya Express:</span>
-                    <span class="font-semibold text-yellow-600">Rp ${formatNumber(order.weight * 10000)}</span>
-                </div>` : ''}
-                <div class="flex justify-between pt-2 border-t-2 border-gray-300">
-                    <span class="font-bold text-gray-800">Total:</span>
-                    <span class="font-bold text-xl text-blue-600">Rp ${formatNumber(order.total)}</span>
-                </div>
-            </div>
+        '<div class="space-y-3">' +
+        '<div class="flex justify-between py-3 border-b">' +
+        '<span class="text-gray-600"><i class="fas fa-spray-can mr-2 text-blue-600"></i>Layanan:</span>' +
+        '<span class="font-bold text-gray-800">' + escapeHtml(serviceName) + '</span></div>' +
 
-        </div>`;
+        '<div class="flex justify-between py-3 border-b">' +
+        '<span class="text-gray-600"><i class="fas fa-weight mr-2 text-blue-600"></i>Berat:</span>' +
+        '<span class="font-bold text-gray-800">' + parseFloat(order.weight).toFixed(1) + ' kg</span></div>' +
+
+        (order.is_express
+            ? '<div class="flex justify-between py-3 border-b"><span class="text-gray-600"><i class="fas fa-bolt mr-2 text-yellow-600"></i>Express:</span><span class="font-bold text-yellow-600">24 Jam</span></div>'
+            : '') +
+
+        '<div class="flex justify-between py-3 border-b">' +
+        '<span class="text-gray-600"><i class="fas fa-' + methodIcon + ' mr-2 text-blue-600"></i>Pembayaran:</span>' +
+        '<span class="font-bold text-gray-800">' + methodLabel +
+        (isPaid ? ' <span class="text-green-600 ml-2">&#10003; Lunas</span>' : '') + '</span></div>' +
+
+        '<div class="flex justify-between py-3 border-b">' +
+        '<span class="text-gray-600"><i class="fas fa-map-marker-alt mr-2 text-blue-600"></i>Alamat:</span>' +
+        '<span class="font-semibold text-gray-800 text-right max-w-xs">' + escapeHtml(order.address || '-') + '</span></div>' +
+
+        (order.notes
+            ? '<div class="py-3 border-b"><p class="text-gray-600 mb-2"><i class="fas fa-sticky-note mr-2 text-blue-600"></i>Catatan:</p>' +
+              '<p class="font-semibold text-gray-800 bg-gray-50 rounded p-2">' + escapeHtml(order.notes) + '</p></div>'
+            : '') +
+
+        '<div class="flex justify-between py-3 border-b">' +
+        '<span class="text-gray-600"><i class="far fa-calendar mr-2 text-blue-600"></i>Tanggal Pesan:</span>' +
+        '<span class="font-semibold text-gray-800">' + formatDate(order.created_at) + '</span></div>' +
+        '</div>' +
+
+        '<div class="bg-gray-50 rounded-xl p-4 space-y-2">' +
+        '<div class="flex justify-between text-sm">' +
+        '<span class="text-gray-600">Subtotal:</span>' +
+        '<span class="font-semibold">Rp ' + formatNumber(order.subtotal || order.total) + '</span></div>' +
+
+        (order.delivery_fee && order.delivery_fee > 0
+            ? '<div class="flex justify-between text-sm"><span class="text-gray-600">Biaya Antar-Jemput:</span>' +
+              '<span class="font-semibold">Rp ' + formatNumber(order.delivery_fee) + '</span></div>'
+            : '') +
+
+        (order.is_express
+            ? '<div class="flex justify-between text-sm"><span class="text-gray-600">Biaya Express:</span>' +
+              '<span class="font-semibold text-yellow-600">Rp ' + formatNumber(order.weight * 10000) + '</span></div>'
+            : '') +
+
+        '<div class="flex justify-between pt-2 border-t-2 border-gray-300">' +
+        '<span class="font-bold text-gray-800">Total:</span>' +
+        '<span class="font-bold text-xl text-blue-600">Rp ' + formatNumber(order.total) + '</span></div>' +
+        '</div></div>';
 }
 
 function closeDetailModal() {
     const modal = document.getElementById('detailModal');
-    if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
 }
 
 // ============================================
@@ -592,38 +529,38 @@ function closeDetailModal() {
 // ============================================
 
 function showMonitoringStatus() {
-    const indicator = document.createElement('div');
-    indicator.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2 z-50';
-    indicator.innerHTML = `<div class="w-2 h-2 bg-white rounded-full animate-pulse"></div><span class="text-sm font-semibold">Monitoring Aktif</span>`;
-    document.body.appendChild(indicator);
-    setTimeout(() => { indicator.style.opacity = '0'; indicator.style.transition = 'all 0.5s'; setTimeout(() => indicator.remove(), 500); }, 3000);
+    const el = document.createElement('div');
+    el.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2 z-50';
+    el.innerHTML = '<div class="w-2 h-2 bg-white rounded-full animate-pulse"></div>' +
+                   '<span class="text-sm font-semibold">Monitoring Aktif</span>';
+    document.body.appendChild(el);
+    setTimeout(() => {
+        el.style.transition = 'opacity 0.5s';
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 500);
+    }, 3000);
 }
 
 // ============================================
-// HELPER FUNCTIONS
+// HELPERS
 // ============================================
 
 function initializeOrderStates() {
-    document.querySelectorAll('[data-order-id]').forEach(element => {
-        const orderId = element.dataset.orderId;
-        const statusEl = element.querySelector('[data-status]');
-        const paymentEl = element.querySelector('[data-payment-status]');
-        if (statusEl) {
-            lastOrderStates[orderId] = {
-                status: statusEl.dataset.status,
-                payment_status: paymentEl?.dataset.paymentStatus || 'unpaid',
-                timestamp: Date.now()
-            };
-        }
+    document.querySelectorAll('#active-orders-container [data-order-id]').forEach(el => {
+        lastOrderStates[el.dataset.orderId] = {
+            status:         el.dataset.status || 'pending',
+            payment_status: el.dataset.paymentStatus || 'unpaid'
+        };
     });
-    console.log('📋 Initialized', Object.keys(lastOrderStates).length, 'order states');
+    console.log('Initialized', Object.keys(lastOrderStates).length, 'order states from DOM');
 }
 
 function formatNumber(num) {
-    return new Intl.NumberFormat('id-ID').format(num);
+    return new Intl.NumberFormat('id-ID').format(num || 0);
 }
 
 function formatDate(dateString) {
+    if (!dateString) return '-';
     try {
         return new Date(dateString).toLocaleDateString('id-ID', {
             year: 'numeric', month: 'short', day: 'numeric',
@@ -632,59 +569,90 @@ function formatDate(dateString) {
     } catch (e) { return dateString; }
 }
 
-function setupUserMenuToggle() {
-    const userMenuBtn = document.getElementById('userMenuBtn');
-    const userDropdown = document.getElementById('userDropdown');
-    const dropdownIcon = document.getElementById('dropdownIcon');
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
 
-    if (userMenuBtn && userDropdown) {
-        userMenuBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            userDropdown.classList.toggle('hidden');
-            if (dropdownIcon) {
-                dropdownIcon.style.transform = userDropdown.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
-            }
-        });
-        document.addEventListener('click', (e) => {
-            if (!userMenuBtn.contains(e.target) && !userDropdown.contains(e.target)) {
-                userDropdown.classList.add('hidden');
-                if (dropdownIcon) dropdownIcon.style.transform = 'rotate(0deg)';
-            }
-        });
-    }
+function escapeAttr(str) {
+    if (!str) return '';
+    return String(str).replace(/"/g, '&quot;');
+}
+
+function setupUserMenuToggle() {
+    const btn  = document.getElementById('userMenuBtn');
+    const drop = document.getElementById('userDropdown');
+    const icon = document.getElementById('dropdownIcon');
+    if (!btn || !drop) return;
+
+    btn.addEventListener('click', e => {
+        e.stopPropagation();
+        drop.classList.toggle('hidden');
+        if (icon) icon.style.transform = drop.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
+    });
+    document.addEventListener('click', e => {
+        if (!btn.contains(e.target) && !drop.contains(e.target)) {
+            drop.classList.add('hidden');
+            if (icon) icon.style.transform = 'rotate(0deg)';
+        }
+    });
 }
 
 function setupMobileMenu() {
-    const btn = document.getElementById('mobileMenuBtn');
+    const btn  = document.getElementById('mobileMenuBtn');
     const menu = document.getElementById('mobileMenu');
     if (btn && menu) btn.addEventListener('click', () => menu.classList.toggle('hidden'));
 }
 
 function setupScrollFunctions() {
-    window.scrollToOrders = function() {
-        document.querySelector('#active-orders-container')?.parentElement.scrollIntoView({ behavior: 'smooth' });
+    window.scrollToOrders = () => {
+        document.getElementById('active-orders-container')
+            ?.parentElement.scrollIntoView({ behavior: 'smooth' });
     };
-    window.scrollToHistory = function() {
-        document.querySelector('#riwayat')?.scrollIntoView({ behavior: 'smooth' });
+    window.scrollToHistory = () => {
+        document.getElementById('riwayat')?.scrollIntoView({ behavior: 'smooth' });
     };
 }
+
+// ============================================
+// VISIBILITY CHANGE — resume saat tab aktif kembali
+// ============================================
+
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+        if (!isMonitoring && apiAvailable) {
+            startRealTimeMonitoring();
+        } else if (isMonitoring) {
+            // Langsung fetch tanpa tunggu interval berikutnya
+            fetchOrderUpdates();
+        }
+    }
+});
 
 // ============================================
 // CLEANUP
 // ============================================
 
-document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && !isMonitoring && apiAvailable) startRealTimeMonitoring();
-    else if (!document.hidden && apiAvailable) fetchOrderUpdates();
-});
+window.addEventListener('beforeunload', stopRealTimeMonitoring);
 
-window.addEventListener('beforeunload', () => stopRealTimeMonitoring());
-
+// Debug di console browser
 window.dashboardMonitoring = {
-    start: startRealTimeMonitoring,
-    stop: stopRealTimeMonitoring,
-    fetchNow: fetchOrderUpdates,
-    status: () => ({ isMonitoring, apiAvailable, orderCount: Object.keys(lastOrderStates).length })
+    start:     startRealTimeMonitoring,
+    stop:      stopRealTimeMonitoring,
+    fetchNow:  fetchOrderUpdates,
+    testSound: playNotificationSound,
+    status:    () => ({
+        isMonitoring,
+        apiAvailable,
+        audioUnlocked,
+        isFetching,
+        orderCount: Object.keys(lastOrderStates).length,
+        states: lastOrderStates
+    })
 };
 
-console.log('✅ Dashboard v3.2 loaded');
+console.log('Dashboard v4.0 loaded — monitoring will start automatically');

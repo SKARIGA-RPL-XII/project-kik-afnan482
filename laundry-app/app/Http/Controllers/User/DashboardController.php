@@ -14,35 +14,44 @@ class DashboardController extends Controller
         $userId = Auth::guard('web')->id();
 
         // Scope: hanya tampilkan pesanan yang valid
-        // Cash selalu tampil, Midtrans hanya jika payment_status sudah paid/pending/success
+        // Cash: selalu tampil
+        // Midtrans: HANYA tampil jika payment_status sudah bukan 'unpaid'
+        //           (pending = Midtrans sedang proses, success/paid = berhasil)
+        // Juga exclude pesanan yang sudah cancelled
         $visible = function ($q) {
-            $q->where(function ($sub) {
-                $sub->where('payment_method', 'cash')
-                    ->orWhereIn('payment_status', ['paid', 'pending', 'success']);
-            });
+            $q->where('status', '!=', 'cancelled')
+              ->where(function ($sub) {
+                  $sub->where('payment_method', 'cash')
+                      ->orWhere(function ($m) {
+                          // Midtrans hanya jika sudah ada interaksi nyata dengan gateway
+                          $m->where('payment_method', 'midtrans')
+                            ->where('payment_status', '!=', 'unpaid');
+                      });
+              });
         };
 
-        $totalOrders = Pesanan::where('user_id', $userId)
+        $pendingOrders = Pesanan::where('user_id', $userId)
+            ->where('status', 'pending')
             ->where($visible)
             ->count();
 
-        $processingOrders = Pesanan::where('user_id', $userId)
-            ->whereIn('status', ['pending', 'proses'])
+        $prosesOrders = Pesanan::where('user_id', $userId)
+            ->where('status', 'proses')
             ->where($visible)
             ->count();
 
-        $readyOrders = Pesanan::where('user_id', $userId)
+        $selesaiOrders = Pesanan::where('user_id', $userId)
             ->where('status', 'selesai')
             ->where($visible)
             ->count();
 
-        $totalSpent = Pesanan::where('user_id', $userId)
+        $diambilOrders = Pesanan::where('user_id', $userId)
             ->where('status', 'diambil')
             ->where($visible)
-            ->sum('total');
+            ->count();
 
         $activeOrders = Pesanan::where('user_id', $userId)
-            ->whereIn('status', ['pending', 'proses', 'selesai'])
+            ->whereIn('status', ['pending', 'proses', 'selesai', 'diambil'])
             ->where($visible)
             ->orderBy('created_at', 'desc')
             ->get()
@@ -78,10 +87,10 @@ class DashboardController extends Controller
             });
 
         return view('user.dashboard', compact(
-            'totalOrders',
-            'processingOrders',
-            'readyOrders',
-            'totalSpent',
+            'pendingOrders',
+            'prosesOrders',
+            'selesaiOrders',
+            'diambilOrders',
             'activeOrders',
             'orderHistory'
         ));
@@ -100,12 +109,12 @@ class DashboardController extends Controller
     private function getStatusLabel($status)
     {
         $labels = [
-            'pending' => 'Pesanan Baru',
-            'proses'  => 'Sedang Diproses',
-            'selesai' => 'Siap Diambil',
-            'diambil' => 'Telah Diambil',
+            'pending' => 'Pending',
+            'proses'  => 'Proses',
+            'selesai' => 'Selesai',
+            'diambil' => 'Diambil',
         ];
-        return $labels[$status] ?? $status;
+        return $labels[$status] ?? ucfirst($status);
     }
 
     private function getStatusColor($status)

@@ -184,9 +184,7 @@
             </div>
         </div>
 
-        <div class="text-center mt-8 text-sm text-gray-500 animate-fade-in">
-            <p>&copy; 2026 Sistem Informasi Laundry. All rights reserved.</p>
-        </div>
+        
     </div>
 
     <script>

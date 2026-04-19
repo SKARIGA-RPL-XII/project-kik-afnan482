@@ -8,9 +8,6 @@ use App\Http\Controllers\User\DashboardController;
 use App\Http\Controllers\User\PemesananController;
 use App\Http\Controllers\User\ProfileController;
 
-// HAPUS import RiwayatController karena riwayat ditangani PemesananController
-// use App\Http\Controllers\User\RiwayatController;
-
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\PesananController;
 use App\Http\Controllers\Admin\PelangganController;
@@ -118,23 +115,37 @@ Route::middleware(['auth', 'role:user'])
         Route::get('/orders-status', function () {
             $userId = Auth::id();
 
+            $serviceNames = [
+                'cuci_kering'  => 'Cuci Kering',
+                'cuci_setrika' => 'Cuci & Setrika',
+                'setrika_saja' => 'Setrika Saja',
+            ];
+
             $orders = \App\Models\Pesanan::where('user_id', $userId)
-                ->whereNotIn('status', ['cancelled'])
+                ->whereIn('status', ['pending', 'proses', 'selesai', 'diambil'])
+                // Cash selalu tampil; Midtrans hanya jika payment_status sudah bukan 'unpaid'
+                ->where(function ($q) {
+                    $q->where('payment_method', 'cash')
+                      ->orWhere(function ($m) {
+                          $m->where('payment_method', 'midtrans')
+                            ->where('payment_status', '!=', 'unpaid');
+                      });
+                })
                 ->orderBy('created_at', 'desc')
                 ->get()
-                ->map(function ($order) {
+                ->map(function ($order) use ($serviceNames) {
                     return [
                         'id'             => $order->id,
                         'invoice'        => $order->invoice,
                         'status'         => $order->status,
                         'payment_status' => $order->payment_status ?? 'unpaid',
                         'payment_method' => $order->payment_method ?? 'cash',
-                        'service_type'   => $order->service_type,
+                        'service_type'   => $serviceNames[$order->service_type] ?? $order->service_type,
                         'weight'         => $order->weight,
                         'is_express'     => $order->is_express ?? false,
                         'total'          => $order->total,
                         'subtotal'       => $order->subtotal ?? $order->total,
-                        'delivery_fee'   => $order->delivery_fee ?? 5000,
+                        'delivery_fee'   => $order->delivery_fee ?? 0,
                         'created_at'     => $order->created_at->toISOString(),
                         'snap_token'     => $order->snap_token ?? null,
                     ];
@@ -143,7 +154,7 @@ Route::middleware(['auth', 'role:user'])
             return response()->json([
                 'success'   => true,
                 'data'      => $orders,
-                'timestamp' => now()->toISOString()
+                'timestamp' => now()->toISOString(),
             ]);
         })->name('orders.status');
 
@@ -157,9 +168,15 @@ Route::middleware(['auth', 'role:user'])
             if (!$order) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Pesanan tidak ditemukan'
+                    'message' => 'Pesanan tidak ditemukan',
                 ], 404);
             }
+
+            $serviceNames = [
+                'cuci_kering'  => 'Cuci Kering',
+                'cuci_setrika' => 'Cuci & Setrika',
+                'setrika_saja' => 'Setrika Saja',
+            ];
 
             return response()->json([
                 'success' => true,
@@ -169,18 +186,18 @@ Route::middleware(['auth', 'role:user'])
                     'status'         => $order->status,
                     'payment_status' => $order->payment_status ?? 'unpaid',
                     'payment_method' => $order->payment_method ?? 'cash',
-                    'service_type'   => $order->service_type,
+                    'service_type'   => $serviceNames[$order->service_type] ?? $order->service_type,
                     'weight'         => $order->weight,
                     'is_express'     => $order->is_express ?? false,
                     'address'        => $order->address ?? '-',
                     'notes'          => $order->notes ?? null,
                     'total'          => $order->total,
                     'subtotal'       => $order->subtotal ?? $order->total,
-                    'delivery_fee'   => $order->delivery_fee ?? 5000,
+                    'delivery_fee'   => $order->delivery_fee ?? 0,
                     'created_at'     => $order->created_at->toISOString(),
                     'updated_at'     => $order->updated_at->toISOString(),
                     'snap_token'     => $order->snap_token ?? null,
-                ]
+                ],
             ]);
         })->name('orders.detail');
 
@@ -209,7 +226,7 @@ Route::middleware(['auth', 'role:admin'])
         Route::put('/pesanan/{id}/status', [PesananController::class, 'updateStatus'])->name('pesanan.updateStatus');
         Route::put('/pesanan/{id}/final-weight', [PesananController::class, 'updateFinalWeight'])->name('pesanan.updateFinalWeight');
 
-        /* Pelanggan — route spesifik HARUS sebelum route dengan parameter {id} */
+        /* Pelanggan */
         Route::post('/pelanggan/geocode', [PelangganController::class, 'reverseGeocode'])
             ->name('pelanggan.geocode');
         Route::get('/pelanggan/{id}/riwayat', [PelangganController::class, 'getRiwayatPesanan'])

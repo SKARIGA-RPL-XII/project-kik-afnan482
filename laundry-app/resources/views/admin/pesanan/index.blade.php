@@ -245,33 +245,6 @@
         </div>
     </div>
 
-    <!-- Modal Input Berat Akhir -->
-    <div id="weightModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4">
-        <div class="bg-white rounded-2xl p-6 lg:p-8 w-full max-w-md">
-            <div class="flex items-center justify-between mb-6">
-                <h3 class="text-xl font-bold text-gray-800">Input Berat Akhir</h3>
-                <button onclick="closeWeightModal()" class="text-gray-400 hover:text-gray-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-            <form onsubmit="updateFinalWeight(event)">
-                <div class="mb-2">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Berat Estimasi</label>
-                    <input type="text" id="estimatedWeight" class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100" readonly>
-                </div>
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Berat Akhir (Kg) <span class="text-red-500">*</span></label>
-                    <input type="number" id="newFinalWeight" step="0.1" min="0.1" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                    <p class="text-xs text-gray-500 mt-1">Total biaya akan dihitung ulang berdasarkan berat akhir</p>
-                </div>
-                <div class="flex gap-3">
-                    <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium">Simpan</button>
-                    <button type="button" onclick="closeWeightModal()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 rounded-lg font-medium">Batal</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     

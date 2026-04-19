@@ -75,13 +75,16 @@ class PemesananController extends Controller
             $invoice = Pesanan::generateInvoice();
             $orderId = 'LDRY-' . time() . '-' . uniqid();
 
-            // PERBAIKAN: Set status dan payment_status berdasarkan metode pembayaran
-            $orderStatus = 'pending';  // Default status untuk semua pesanan baru
-            $paymentStatus = 'pending'; // Default payment status
-            
-            // Untuk cash payment, langsung set payment_status = 'unpaid'
+            // Set status dan payment_status berdasarkan metode pembayaran
+            $orderStatus = 'pending';   // Default status untuk semua pesanan baru
+
+            // Untuk Midtrans, mulai dengan 'unpaid' — hanya berubah ke 'pending'
+            // setelah Midtrans mengirim notifikasi (via callback). Ini memastikan
+            // pesanan yang ditutup sebelum membayar tidak muncul di dashboard.
             if ($request->payment_method === 'cash') {
                 $paymentStatus = 'unpaid'; // Belum dibayar, akan dibayar saat pengambilan
+            } else {
+                $paymentStatus = 'unpaid'; // Midtrans: pending hanya setelah Midtrans notif
             }
 
             $pesanan = Pesanan::create([
@@ -385,14 +388,14 @@ public function riwayat(Request $request)
                 if ($fraudStatus == 'accept') {
                     $pesanan->update([
                         'payment_status' => 'success',
-                        'status' => 'processing', // PERBAIKAN: Gunakan status yang valid
+                        'status' => 'proses', // PERBAIKAN: Gunakan status yang valid
                         'paid_at' => now(),
                     ]);
                 }
             } elseif ($transactionStatus == 'settlement') {
                 $pesanan->update([
                     'payment_status' => 'success',
-                    'status' => 'processing', // PERBAIKAN: Gunakan status yang valid
+                    'status' => 'proses', // PERBAIKAN: Gunakan status yang valid
                     'paid_at' => now(),
                 ]);
             } elseif ($transactionStatus == 'pending') {

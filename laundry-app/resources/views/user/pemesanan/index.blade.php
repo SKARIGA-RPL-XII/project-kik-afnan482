@@ -173,7 +173,6 @@
               <!-- Right Section -->
 <div class="flex items-center space-x-3">
     <button class="relative p-2 hover:bg-gray-100 rounded-lg transition">
-        <i class="fas fa-bell text-gray-600"></i>
         <span id="notificationBadge" class="hidden absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
     </button>
 

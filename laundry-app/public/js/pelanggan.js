@@ -3,66 +3,49 @@
  * Handles map initialization, address geocoding, and modal interactions
  */
 
-// Utility function
 const $ = id => document.getElementById(id);
 
-// Global map variables
 let addMap, addMarker, editMap, editMarker;
 
-// Default location: Malang, Indonesia
 const defaultLat = -7.9666;
 const defaultLng = 112.6326;
 
-// Debounce function to prevent too many API calls
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
+        const later = () => { clearTimeout(timeout); func(...args); };
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
     };
 }
 
-// Reverse geocoding menggunakan backend proxy Laravel (mengatasi CORS)
 async function reverseGeocode(lat, lng) {
     try {
-        // Gunakan endpoint Laravel sebagai proxy
         const response = await fetch('/admin/pelanggan/geocode', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                 'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
+                'X-Requested-With': 'XMLHttpRequest',
             },
-            body: JSON.stringify({ lat, lng })
+            body: JSON.stringify({ lat, lng }),
         });
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
         const data = await response.json();
-        
-        if (data.success && data.address) {
-            return data.address;
-        }
-        
-        return null;
+        return (data.success && data.address) ? data.address : null;
     } catch (error) {
         console.warn('Geocoding failed:', error);
         return null;
     }
 }
 
-// Debounced version of reverse geocoding
 const debouncedReverseGeocode = debounce(async (lat, lng, callback) => {
     const address = await reverseGeocode(lat, lng);
     if (callback) callback(lat, lng, address);
-}, 1000); // Wait 1 second before making API call
+}, 1000);
 
 /**
  * Modal Management
@@ -70,13 +53,8 @@ const debouncedReverseGeocode = debounce(async (lat, lng, callback) => {
 function openModal(id) {
     $(id).classList.remove('hidden');
     document.body.style.overflow = 'hidden';
-
-    // Initialize maps when opening modals
-    if (id === 'addModal') {
-        setTimeout(() => initAddMap(), 100);
-    } else if (id === 'editModal') {
-        setTimeout(() => initEditMap(), 100);
-    }
+    if (id === 'addModal')  setTimeout(() => initAddMap(),  100);
+    if (id === 'editModal') setTimeout(() => initEditMap(), 100);
 }
 
 function closeModal(id) {
@@ -85,54 +63,29 @@ function closeModal(id) {
 
     if (id === 'addModal') {
         $('addForm').reset();
-        if (addMap) {
-            addMap.remove();
-            addMap = null;
-            addMarker = null;
-        }
-    } else if (id === 'editModal') {
+        if (addMap) { addMap.remove(); addMap = null; addMarker = null; }
+    }
+    if (id === 'editModal') {
         $('editForm').reset();
-        if (editMap) {
-            editMap.remove();
-            editMap = null;
-            editMarker = null;
-        }
+        if (editMap) { editMap.remove(); editMap = null; editMarker = null; }
     }
 }
 
 /**
- * Add Map Initialization
+ * Add Map
  */
 function initAddMap() {
-    if (addMap) {
-        addMap.remove();
-    }
+    if (addMap) addMap.remove();
 
     addMap = L.map('addMap').setView([defaultLat, defaultLng], 15);
-
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19
+        attribution: '© OpenStreetMap contributors', maxZoom: 19,
     }).addTo(addMap);
 
-    addMarker = L.marker([defaultLat, defaultLng], {
-        draggable: true
-    }).addTo(addMap);
+    addMarker = L.marker([defaultLat, defaultLng], { draggable: true }).addTo(addMap);
 
-    // Geocoder
-    const geocoder = L.Control.Geocoder.nominatim({
-        geocodingQueryParams: {
-            countrycodes: 'id',
-            limit: 5
-        }
-    });
-
-    L.Control.geocoder({
-        geocoder: geocoder,
-        defaultMarkGeocode: false,
-        placeholder: 'Cari alamat...',
-        errorMessage: 'Alamat tidak ditemukan'
-    })
+    const geocoder = L.Control.Geocoder.nominatim({ geocodingQueryParams: { countrycodes: 'id', limit: 5 } });
+    L.Control.geocoder({ geocoder, defaultMarkGeocode: false, placeholder: 'Cari alamat...', errorMessage: 'Alamat tidak ditemukan' })
         .on('markgeocode', function (e) {
             const latlng = e.geocode.center;
             addMap.setView(latlng, 16);
@@ -141,9 +94,9 @@ function initAddMap() {
         })
         .addTo(addMap);
 
-    addMarker.on('dragend', function (e) {
-        const position = addMarker.getLatLng();
-        debouncedReverseGeocode(position.lat, position.lng, updateAddAddress);
+    addMarker.on('dragend', function () {
+        const pos = addMarker.getLatLng();
+        debouncedReverseGeocode(pos.lat, pos.lng, updateAddAddress);
     });
 
     addMap.on('click', function (e) {
@@ -151,92 +104,56 @@ function initAddMap() {
         debouncedReverseGeocode(e.latlng.lat, e.latlng.lng, updateAddAddress);
     });
 
-    // Use My Location button
     $('addUseMyLocation').onclick = function () {
-        if (navigator.geolocation) {
-            const button = this;
-            const icon = button.querySelector('i');
+        if (!navigator.geolocation) return;
+        const btn  = this;
+        const icon = btn.querySelector('i');
+        icon.classList.replace('fa-crosshairs', 'fa-spinner');
+        icon.classList.add('fa-spin');
+        btn.disabled = true;
 
-            icon.classList.remove('fa-crosshairs');
-            icon.classList.add('fa-spinner', 'fa-spin');
-            button.disabled = true;
-
-            navigator.geolocation.getCurrentPosition(
-                async function (position) {
-                    const lat = position.coords.latitude;
-                    const lng = position.coords.longitude;
-
-                    addMap.setView([lat, lng], 17);
-                    addMarker.setLatLng([lat, lng]);
-
-                    // Get address
-                    const address = await reverseGeocode(lat, lng);
-                    updateAddAddress(lat, lng, address);
-
-                    icon.classList.remove('fa-spinner', 'fa-spin');
-                    icon.classList.add('fa-crosshairs');
-                    button.disabled = false;
-                },
-                function (error) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Gagal Mengakses Lokasi',
-                        text: 'Izin lokasi ditolak atau tidak tersedia.'
-                    });
-
-                    icon.classList.remove('fa-spinner', 'fa-spin');
-                    icon.classList.add('fa-crosshairs');
-                    button.disabled = false;
-                }
-            );
-        }
+        navigator.geolocation.getCurrentPosition(
+            async function (pos) {
+                const lat = pos.coords.latitude, lng = pos.coords.longitude;
+                addMap.setView([lat, lng], 17);
+                addMarker.setLatLng([lat, lng]);
+                const address = await reverseGeocode(lat, lng);
+                updateAddAddress(lat, lng, address);
+                icon.classList.remove('fa-spinner', 'fa-spin');
+                icon.classList.add('fa-crosshairs');
+                btn.disabled = false;
+            },
+            function () {
+                Swal.fire({ icon: 'error', title: 'Gagal Mengakses Lokasi', text: 'Izin lokasi ditolak atau tidak tersedia.' });
+                icon.classList.remove('fa-spinner', 'fa-spin');
+                icon.classList.add('fa-crosshairs');
+                btn.disabled = false;
+            }
+        );
     };
 }
 
 function updateAddAddress(lat, lng, addressText) {
-    $('add_latitude').value = lat;
+    $('add_latitude').value  = lat;
     $('add_longitude').value = lng;
-    
-    if (addressText) {
-        $('add_alamat').value = addressText;
-    } else {
-        $('add_alamat').value = `Lokasi: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-    }
+    $('add_address').value   = addressText || `Lokasi: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
 }
 
 /**
- * Edit Map Initialization
+ * Edit Map
  */
 function initEditMap() {
-    if (editMap) {
-        editMap.remove();
-    }
+    if (editMap) editMap.remove();
 
     editMap = L.map('editMap').setView([defaultLat, defaultLng], 15);
-
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19
+        attribution: '© OpenStreetMap contributors', maxZoom: 19,
     }).addTo(editMap);
 
-    editMarker = L.marker([defaultLat, defaultLng], {
-        draggable: true
-    }).addTo(editMap);
+    editMarker = L.marker([defaultLat, defaultLng], { draggable: true }).addTo(editMap);
 
-    // Geocoder
-    const geocoder = L.Control.Geocoder.nominatim({
-        geocodingQueryParams: {
-            countrycodes: 'id',
-            limit: 5
-        }
-    });
-
-    L.Control.geocoder({
-        geocoder: geocoder,
-        defaultMarkGeocode: false,
-        placeholder: 'Cari alamat...',
-        errorMessage: 'Alamat tidak ditemukan'
-    })
+    const geocoder = L.Control.Geocoder.nominatim({ geocodingQueryParams: { countrycodes: 'id', limit: 5 } });
+    L.Control.geocoder({ geocoder, defaultMarkGeocode: false, placeholder: 'Cari alamat...', errorMessage: 'Alamat tidak ditemukan' })
         .on('markgeocode', function (e) {
             const latlng = e.geocode.center;
             editMap.setView(latlng, 16);
@@ -245,9 +162,9 @@ function initEditMap() {
         })
         .addTo(editMap);
 
-    editMarker.on('dragend', function (e) {
-        const position = editMarker.getLatLng();
-        debouncedReverseGeocode(position.lat, position.lng, updateEditAddress);
+    editMarker.on('dragend', function () {
+        const pos = editMarker.getLatLng();
+        debouncedReverseGeocode(pos.lat, pos.lng, updateEditAddress);
     });
 
     editMap.on('click', function (e) {
@@ -255,57 +172,39 @@ function initEditMap() {
         debouncedReverseGeocode(e.latlng.lat, e.latlng.lng, updateEditAddress);
     });
 
-    // Use My Location button
     $('editUseMyLocation').onclick = function () {
-        if (navigator.geolocation) {
-            const button = this;
-            const icon = button.querySelector('i');
+        if (!navigator.geolocation) return;
+        const btn  = this;
+        const icon = btn.querySelector('i');
+        icon.classList.replace('fa-crosshairs', 'fa-spinner');
+        icon.classList.add('fa-spin');
+        btn.disabled = true;
 
-            icon.classList.remove('fa-crosshairs');
-            icon.classList.add('fa-spinner', 'fa-spin');
-            button.disabled = true;
-
-            navigator.geolocation.getCurrentPosition(
-                async function (position) {
-                    const lat = position.coords.latitude;
-                    const lng = position.coords.longitude;
-
-                    editMap.setView([lat, lng], 17);
-                    editMarker.setLatLng([lat, lng]);
-
-                    // Get address
-                    const address = await reverseGeocode(lat, lng);
-                    updateEditAddress(lat, lng, address);
-
-                    icon.classList.remove('fa-spinner', 'fa-spin');
-                    icon.classList.add('fa-crosshairs');
-                    button.disabled = false;
-                },
-                function (error) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Gagal Mengakses Lokasi',
-                        text: 'Izin lokasi ditolak atau tidak tersedia.'
-                    });
-
-                    icon.classList.remove('fa-spinner', 'fa-spin');
-                    icon.classList.add('fa-crosshairs');
-                    button.disabled = false;
-                }
-            );
-        }
+        navigator.geolocation.getCurrentPosition(
+            async function (pos) {
+                const lat = pos.coords.latitude, lng = pos.coords.longitude;
+                editMap.setView([lat, lng], 17);
+                editMarker.setLatLng([lat, lng]);
+                const address = await reverseGeocode(lat, lng);
+                updateEditAddress(lat, lng, address);
+                icon.classList.remove('fa-spinner', 'fa-spin');
+                icon.classList.add('fa-crosshairs');
+                btn.disabled = false;
+            },
+            function () {
+                Swal.fire({ icon: 'error', title: 'Gagal Mengakses Lokasi', text: 'Izin lokasi ditolak atau tidak tersedia.' });
+                icon.classList.remove('fa-spinner', 'fa-spin');
+                icon.classList.add('fa-crosshairs');
+                btn.disabled = false;
+            }
+        );
     };
 }
 
 function updateEditAddress(lat, lng, addressText) {
-    $('edit_latitude').value = lat;
+    $('edit_latitude').value  = lat;
     $('edit_longitude').value = lng;
-    
-    if (addressText) {
-        $('edit_alamat').value = addressText;
-    } else {
-        $('edit_alamat').value = `Lokasi: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-    }
+    $('edit_address').value   = addressText || `Lokasi: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
 }
 
 /**
@@ -335,7 +234,7 @@ function viewDetail(data) {
                 </div>
                 <div class="col-span-2">
                     <p class="text-xs text-gray-500">Alamat</p>
-                    <p class="font-semibold text-sm">${data.alamat || '-'}</p>
+                    <p class="font-semibold text-sm">${data.address || '-'}</p>
                 </div>
             </div>
         </div>
@@ -348,22 +247,20 @@ function viewDetail(data) {
  */
 function editPelanggan(data) {
     $('editForm').action = `/admin/pelanggan/${data.id}`;
-    $('edit_name').value = data.name;
-    $('edit_email').value = data.email;
-    $('edit_phone').value = data.phone || '';
-    $('edit_alamat').value = data.alamat || '';
-    $('edit_password').value = '';
+    $('edit_name').value    = data.name;
+    $('edit_email').value   = data.email;
+    $('edit_phone').value   = data.phone   || '';
+    $('edit_address').value = data.address || '';
+    $('edit_password').value              = '';
     $('edit_password_confirmation').value = '';
 
-    // Set coordinates if available
     if (data.latitude && data.longitude) {
-        $('edit_latitude').value = data.latitude;
+        $('edit_latitude').value  = data.latitude;
         $('edit_longitude').value = data.longitude;
     }
 
     openModal('editModal');
 
-    // Update map position if coordinates available
     if (data.latitude && data.longitude) {
         setTimeout(() => {
             if (editMap && editMarker) {
@@ -380,7 +277,7 @@ function editPelanggan(data) {
  * Delete Pelanggan Modal
  */
 function deletePelanggan(id, name) {
-    $('deleteForm').action = `/admin/pelanggan/${id}`;
+    $('deleteForm').action    = `/admin/pelanggan/${id}`;
     $('deleteName').textContent = name;
     openModal('deleteModal');
 }
@@ -399,27 +296,18 @@ async function viewRiwayat(userId) {
 
     try {
         const response = await fetch(`/admin/pelanggan/${userId}/riwayat`, {
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json'
-            }
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
         });
 
-        if (!response.ok) {
-            throw new Error('Gagal memuat data');
-        }
-
+        if (!response.ok) throw new Error('Gagal memuat data');
         const data = await response.json();
-
-        if (!data.success) {
-            throw new Error(data.message || 'Gagal memuat data');
-        }
+        if (!data.success) throw new Error(data.message || 'Gagal memuat data');
 
         const statusColors = {
-            'pending': 'bg-yellow-100 text-yellow-800',
+            'pending':    'bg-yellow-100 text-yellow-800',
             'processing': 'bg-blue-100 text-blue-800',
-            'completed': 'bg-green-100 text-green-800',
-            'cancelled': 'bg-red-100 text-red-800'
+            'completed':  'bg-green-100 text-green-800',
+            'cancelled':  'bg-red-100 text-red-800',
         };
 
         $('riwayatPelangganInfo').textContent = `${data.pelanggan.name} - ${data.pelanggan.email}`;
@@ -431,15 +319,15 @@ async function viewRiwayat(userId) {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
                     </svg>
                     <p class="text-gray-500">Belum ada riwayat pesanan</p>
-                </div>
-            `;
+                </div>`;
             return;
         }
 
         let html = '<div class="space-y-3">';
         data.pesanan.forEach(p => {
-            const expressBadge = p.is_express ? '<span class="ml-2 px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded-full text-xs font-semibold">Express</span>' : '';
-
+            const expressBadge = p.is_express
+                ? '<span class="ml-2 px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded-full text-xs font-semibold">Express</span>'
+                : '';
             html += `
                 <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
                     <div class="flex justify-between items-start mb-3">
@@ -447,7 +335,9 @@ async function viewRiwayat(userId) {
                             <div class="font-bold text-blue-600">${p.invoice}</div>
                             <div class="text-xs text-gray-500 mt-1">${p.created_at}</div>
                         </div>
-                        <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusColors[p.status] || 'bg-gray-100 text-gray-800'}">${p.status.charAt(0).toUpperCase() + p.status.slice(1)}</span>
+                        <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusColors[p.status] || 'bg-gray-100 text-gray-800'}">
+                            ${p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                        </span>
                     </div>
                     <div class="grid grid-cols-2 gap-3 text-sm mb-3">
                         <div>
@@ -466,11 +356,9 @@ async function viewRiwayat(userId) {
                         <span class="text-gray-500 text-sm">Total:</span>
                         <span class="font-bold text-blue-600">Rp ${parseFloat(p.total).toLocaleString('id-ID')}</span>
                     </div>
-                </div>
-            `;
+                </div>`;
         });
         html += '</div>';
-
         $('riwayatContent').innerHTML = html;
 
     } catch (error) {
@@ -481,61 +369,40 @@ async function viewRiwayat(userId) {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
                 <p class="text-red-500">${error.message}</p>
-            </div>
-        `;
+            </div>`;
     }
 }
 
 /**
- * Form Validation and Submission
+ * Form Validation
  */
 function initFormValidation() {
-    // Add Form
     $('addForm').addEventListener('submit', function (e) {
         e.preventDefault();
         const p = $('add_password').value;
         const c = $('add_password_confirmation').value;
-
-        if (p.length < 8) {
-            Swal.fire({ icon: 'error', title: 'Error', text: 'Password minimal 8 karakter' });
-            return false;
-        }
-        if (p !== c) {
-            Swal.fire({ icon: 'error', title: 'Error', text: 'Password tidak cocok' });
-            return false;
-        }
+        if (p.length < 8) { Swal.fire({ icon: 'error', title: 'Error', text: 'Password minimal 8 karakter' }); return; }
+        if (p !== c)       { Swal.fire({ icon: 'error', title: 'Error', text: 'Password tidak cocok' }); return; }
         this.submit();
     });
 
-    // Edit Form
     $('editForm').addEventListener('submit', function (e) {
         e.preventDefault();
         const p = $('edit_password').value;
         const c = $('edit_password_confirmation').value;
-
-        if (p && p.length < 8) {
-            Swal.fire({ icon: 'error', title: 'Error', text: 'Password minimal 8 karakter' });
-            return false;
-        }
-        if (p && p !== c) {
-            Swal.fire({ icon: 'error', title: 'Error', text: 'Password tidak cocok' });
-            return false;
-        }
+        if (p && p.length < 8) { Swal.fire({ icon: 'error', title: 'Error', text: 'Password minimal 8 karakter' }); return; }
+        if (p && p !== c)      { Swal.fire({ icon: 'error', title: 'Error', text: 'Password tidak cocok' }); return; }
         this.submit();
     });
 }
 
-/**
- * Initialize on DOM Ready
- */
 document.addEventListener('DOMContentLoaded', function () {
     initFormValidation();
 });
 
-// Export functions to global scope for inline event handlers
-window.openModal = openModal;
-window.closeModal = closeModal;
-window.viewDetail = viewDetail;
-window.editPelanggan = editPelanggan;
+window.openModal       = openModal;
+window.closeModal      = closeModal;
+window.viewDetail      = viewDetail;
+window.editPelanggan   = editPelanggan;
 window.deletePelanggan = deletePelanggan;
-window.viewRiwayat = viewRiwayat;
+window.viewRiwayat     = viewRiwayat;

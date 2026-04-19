@@ -12,42 +12,59 @@ class DashboardController extends Controller
 {
     public function index()
     {
-        // Hitung pesanan hari ini PERTAMA
-        $pesananHariIni = Pesanan::whereDate('created_at', Carbon::today())->count();
+        // Scope pesanan valid: bukan cancelled, dan Midtrans hanya jika sudah ada pembayaran
+        $validScope = function ($q) {
+            $q->where('status', '!=', 'cancelled')
+              ->where(function ($sub) {
+                  $sub->where('payment_method', 'cash')
+                      ->orWhere(function ($m) {
+                          $m->where('payment_method', 'midtrans')
+                            ->whereIn('payment_status', ['pending', 'success', 'paid']);
+                      });
+              });
+        };
+
+        // Hitung pesanan hari ini (hanya pesanan valid)
+        $pesananHariIni = Pesanan::where($validScope)
+            ->whereDate('created_at', Carbon::today())->count();
         
         // Statistik lainnya
-        $totalPesanan = Pesanan::count();
-        $pesananSelesai = Pesanan::where('status', 'selesai')->count();
-        $pesananProses = Pesanan::where('status', 'proses')->count();
-        $pesananPending = Pesanan::where('status', 'pending')->count();
+        $totalPesanan   = Pesanan::where($validScope)->count();
+        $pesananSelesai = Pesanan::where($validScope)->where('status', 'selesai')->count();
+        $pesananProses  = Pesanan::where($validScope)->where('status', 'proses')->count();
+        $pesananPending = Pesanan::where($validScope)->where('status', 'pending')->count();
         
-        $totalPendapatan = Pesanan::whereIn('status', ['selesai', 'diambil'])->sum('total');
+        $totalPendapatan = Pesanan::where($validScope)
+            ->whereIn('status', ['selesai', 'diambil'])->sum('total');
         
-        $pendapatanBulanIni = Pesanan::whereIn('status', ['selesai', 'diambil'])
+        $pendapatanBulanIni = Pesanan::where($validScope)
+            ->whereIn('status', ['selesai', 'diambil'])
             ->whereMonth('created_at', Carbon::now()->month)
             ->whereYear('created_at', Carbon::now()->year)
             ->sum('total');
         
         $totalPelanggan = User::where('role', 'user')->count();
         
-        // Grafik Pesanan
+        // Grafik Pesanan (hanya pesanan valid)
         $chartPesanan = Pesanan::select(
                 DB::raw('MONTH(created_at) as month'),
                 DB::raw('YEAR(created_at) as year'),
                 DB::raw('COUNT(*) as total')
             )
+            ->where($validScope)
             ->where('created_at', '>=', Carbon::now()->subMonths(12))
             ->groupBy('year', 'month')
             ->orderBy('year', 'asc')
             ->orderBy('month', 'asc')
             ->get();
         
-        // Grafik Pendapatan
+        // Grafik Pendapatan (hanya pesanan valid)
         $chartPendapatan = Pesanan::select(
                 DB::raw('MONTH(created_at) as month'),
                 DB::raw('YEAR(created_at) as year'),
                 DB::raw('SUM(total) as total')
             )
+            ->where($validScope)
             ->whereIn('status', ['selesai', 'diambil'])
             ->where('created_at', '>=', Carbon::now()->subMonths(12))
             ->groupBy('year', 'month')
@@ -72,6 +89,7 @@ class DashboardController extends Controller
         
         $layananTerpopuler = Pesanan::select('layanan_id', DB::raw('COUNT(*) as total'))
             ->with('layanan')
+            ->where($validScope)
             ->whereNotNull('layanan_id')
             ->groupBy('layanan_id')
             ->orderBy('total', 'desc')
@@ -79,6 +97,7 @@ class DashboardController extends Controller
             ->get();
         
         $pesananTerbaru = Pesanan::with('user', 'layanan')
+            ->where($validScope)
             ->orderBy('created_at', 'desc')
             ->limit(5)
             ->get();

@@ -36,7 +36,7 @@
                 <a href="{{ route('user.riwayat.index') }}" class="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium"><i class="fas fa-history mr-2"></i>Riwayat</a>
             </div>
             <div class="flex items-center space-x-3">
-                <button class="p-2 hover:bg-gray-100 rounded-lg transition"><i class="fas fa-bell text-gray-600"></i></button>
+                <button class="p-2 hover:bg-gray-100 rounded-lg transition"></button>
                 <div class="relative">
                     @php
                         $profileImageUrl = null;
@@ -105,10 +105,10 @@
         <input type="text" name="search" value="{{ request('search') }}" placeholder="Cari nomor invoice..." class="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
         <select name="status" class="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">Semua Status</option>
-            <option value="pending"  {{ request('status')=='pending'  ?'selected':'' }}>Menunggu</option>
-            <option value="proses"   {{ request('status')=='proses'   ?'selected':'' }}>Diproses</option>
-            <option value="selesai"  {{ request('status')=='selesai'  ?'selected':'' }}>Siap Diambil</option>
-            <option value="diambil"  {{ request('status')=='diambil'  ?'selected':'' }}>Selesai</option>
+            <option value="pending"  {{ request('status')=='pending'  ?'selected':'' }}>Pending</option>
+            <option value="proses"   {{ request('status')=='proses'   ?'selected':'' }}>Proses</option>
+            <option value="selesai"  {{ request('status')=='selesai'  ?'selected':'' }}>Selesai</option>
+            <option value="diambil"  {{ request('status')=='diambil'  ?'selected':'' }}>Diambil</option>
         </select>
         <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition"><i class="fas fa-search mr-1"></i>Cari</button>
         @if(request('search') || request('status'))
@@ -125,10 +125,10 @@
             $online  = ($pesanan->payment_method ?? '') === 'midtrans';
             $paid    = in_array($pesanan->payment_status ?? '', ['paid','success']);
             $sCfg    = [
-                'pending' => ['label'=>'Pesanan Baru','icon'=>'fa-clock',       'class'=>'bg-yellow-100 text-yellow-800'],
-                'proses'  => ['label'=>'Sedang Diproses',   'icon'=>'fa-sync',        'class'=>'bg-blue-100 text-blue-800'],
-                'selesai' => ['label'=>'Siap Diambil',      'icon'=>'fa-check-circle','class'=>'bg-green-100 text-green-800'],
-                'diambil' => ['label'=>'Selesai',           'icon'=>'fa-check-double','class'=>'bg-gray-200 text-gray-700'],
+                'pending' => ['label'=>'Pending',      'icon'=>'fa-clock',       'class'=>'bg-yellow-100 text-yellow-800'],
+                'proses'  => ['label'=>'Proses',       'icon'=>'fa-sync',        'class'=>'bg-blue-100 text-blue-800'],
+                'selesai' => ['label'=>'Selesai',      'icon'=>'fa-check-double','class'=>'bg-green-100 text-green-800'],
+                'diambil' => ['label'=>'Diambil',      'icon'=>'fa-box',         'class'=>'bg-gray-200 text-gray-700'],
             ];
             $badge  = $sCfg[$pesanan->status] ?? ['label'=>ucfirst($pesanan->status),'icon'=>'fa-circle','class'=>'bg-red-100 text-red-700'];
             $modal  = [

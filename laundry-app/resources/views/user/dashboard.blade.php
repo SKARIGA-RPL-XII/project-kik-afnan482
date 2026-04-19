@@ -65,7 +65,6 @@
                 <!-- Right Section -->
                 <div class="flex items-center space-x-3">
                     <button class="relative p-2 hover:bg-gray-100 rounded-lg transition">
-                        <i class="fas fa-bell text-gray-600"></i>
                         <span id="notificationBadge" class="hidden absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
                     </button>
 
@@ -118,7 +117,6 @@
                                     <i class="fas fa-user-circle w-5 mr-3 text-gray-500"></i>
                                     Profil Saya
                                 </a>
-                               
                             </div>
                             <div class="border-t border-gray-100 pt-2">
                                 <form action="{{ route('logout') }}" method="POST">
@@ -174,16 +172,6 @@
                     <p class="text-sm text-gray-600">Kelola pesanan laundry Anda dengan mudah dan praktis</p>
                 </div>
                 <div class="hidden sm:block">
-                    @php
-                        $profileImageUrl = null;
-                        if(auth()->user()->profile_image) {
-                            $imagePath = public_path(auth()->user()->profile_image);
-                            if(file_exists($imagePath)) {
-                                $profileImageUrl = asset(auth()->user()->profile_image) . '?v=' . time();
-                            }
-                        }
-                    @endphp
-
                     @if($profileImageUrl)
                         <img src="{{ $profileImageUrl }}" 
                              alt="{{ auth()->user()->name }}"
@@ -202,20 +190,8 @@
             <div class="bg-white rounded-xl border p-5 hover:shadow-md transition">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-600 mb-1">Total Pesanan</p>
-                        <p class="text-3xl font-bold text-gray-800" data-stat="total-orders">{{ $totalOrders ?? 0 }}</p>
-                    </div>
-                    <div class="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
-                        <i class="fas fa-shopping-bag text-blue-600 text-xl"></i>
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-xl border p-5 hover:shadow-md transition">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm text-gray-600 mb-1">Sedang Proses</p>
-                        <p class="text-3xl font-bold text-gray-800" data-stat="processing-orders">{{ $processingOrders ?? 0 }}</p>
+                        <p class="text-sm text-gray-600 mb-1">Pending</p>
+                        <p class="text-3xl font-bold text-gray-800" data-stat="pending-orders">{{ $pendingOrders ?? 0 }}</p>
                     </div>
                     <div class="w-12 h-12 bg-yellow-50 rounded-lg flex items-center justify-center">
                         <i class="fas fa-clock text-yellow-600 text-xl"></i>
@@ -226,11 +202,23 @@
             <div class="bg-white rounded-xl border p-5 hover:shadow-md transition">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-600 mb-1">Siap Diambil</p>
-                        <p class="text-3xl font-bold text-gray-800" data-stat="ready-orders">{{ $readyOrders ?? 0 }}</p>
+                        <p class="text-sm text-gray-600 mb-1">Proses</p>
+                        <p class="text-3xl font-bold text-gray-800" data-stat="proses-orders">{{ $prosesOrders ?? 0 }}</p>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-sync text-blue-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl border p-5 hover:shadow-md transition">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600 mb-1">Selesai</p>
+                        <p class="text-3xl font-bold text-gray-800" data-stat="selesai-orders">{{ $selesaiOrders ?? 0 }}</p>
                     </div>
                     <div class="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center">
-                        <i class="fas fa-check-circle text-green-600 text-xl"></i>
+                        <i class="fas fa-check-double text-green-600 text-xl"></i>
                     </div>
                 </div>
             </div>
@@ -238,11 +226,11 @@
             <div class="bg-white rounded-xl border p-5 hover:shadow-md transition">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-600 mb-1">Total Belanja</p>
-                        <p class="text-2xl font-bold text-gray-800" data-stat="total-spent">Rp {{ number_format($totalSpent ?? 0, 0, ',', '.') }}</p>
+                        <p class="text-sm text-gray-600 mb-1">Diambil</p>
+                        <p class="text-3xl font-bold text-gray-800" data-stat="diambil-orders">{{ $diambilOrders ?? 0 }}</p>
                     </div>
-                    <div class="w-12 h-12 bg-purple-50 rounded-lg flex items-center justify-center">
-                        <i class="fas fa-money-bill-wave text-purple-600 text-xl"></i>
+                    <div class="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-box text-gray-600 text-xl"></i>
                     </div>
                 </div>
             </div>
@@ -289,13 +277,36 @@
                 @if(isset($activeOrders) && $activeOrders->count() > 0)
                     @foreach($activeOrders as $order)
                         @php
-                            // Badge pembayaran tidak perlu ditampilkan karena untuk Midtrans sudah dibayar saat pemesanan
-                            $showPaymentBadge = false;
+                            $statusIcons = [
+                                'pending' => 'clock',
+                                'proses'  => 'sync',
+                                'selesai' => 'check-double',
+                                'diambil' => 'box',
+                            ];
+                            $statusColors = [
+                                'pending' => 'bg-yellow-100 text-yellow-800',
+                                'proses'  => 'bg-blue-100 text-blue-800',
+                                'selesai' => 'bg-green-100 text-green-800',
+                                'diambil' => 'bg-gray-100 text-gray-800',
+                            ];
+                            $statusLabels = [
+                                'pending' => 'Pending',
+                                'proses'  => 'Proses',
+                                'selesai' => 'Selesai',
+                                'diambil' => 'Diambil',
+                            ];
+                            $icon  = $statusIcons[$order->status]  ?? 'clock';
+                            $color = $statusColors[$order->status] ?? 'bg-gray-100 text-gray-800';
+                            $label = $statusLabels[$order->status] ?? ucfirst($order->status);
+                            $isPaid = in_array($order->payment_status ?? 'unpaid', ['paid', 'success']);
                         @endphp
                         
                         <div class="order-card border-2 border-gray-200 rounded-xl p-4 md:p-5 hover:shadow-lg hover:border-blue-300 transition transform hover:-translate-y-1" 
                              data-order-id="{{ $order->id }}"
+                             data-status="{{ $order->status }}"
+                             data-payment-status="{{ $order->payment_status ?? 'unpaid' }}"
                              onclick="viewDetail({{ $order->id }})">
+
                             <div class="flex justify-between items-start mb-3 md:mb-4">
                                 <div>
                                     <p class="font-bold text-base md:text-lg text-gray-800">{{ $order->invoice }}</p>
@@ -305,18 +316,10 @@
                                     </p>
                                 </div>
                                 <div class="flex flex-col gap-1">
-                                    {{-- Status Pesanan Badge --}}
-                                    <span class="px-3 py-1 rounded-full text-xs font-semibold {{ 
-                                        $order->status == 'pending' ? 'bg-yellow-100 text-yellow-800' : 
-                                        ($order->status == 'proses' ? 'bg-blue-100 text-blue-800' : 
-                                        ($order->status == 'selesai' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'))
-                                    }}" data-status="{{ $order->status }}">
-                                        <i class="fas fa-{{ $order->status == 'pending' ? 'clock' : ($order->status == 'proses' ? 'sync' : 'check-double') }} mr-1"></i>
-                                        @if($order->status == 'pending') Pesanan Baru
-                                        @elseif($order->status == 'proses') Sedang Diproses
-                                        @elseif($order->status == 'selesai') Siap Diambil
-                                        @else {{ ucfirst($order->status) }}
-                                        @endif
+                                    {{-- ✅ Status badge — semua 4 status ditampilkan dengan benar --}}
+                                    <span class="px-3 py-1.5 rounded-full text-xs font-bold {{ $color }}"
+                                          data-status="{{ $order->status }}">
+                                        <i class="fas fa-{{ $icon }} mr-1"></i>{{ $label }}
                                     </span>
                                 </div>
                             </div>
@@ -326,7 +329,7 @@
                                     <p class="text-xs text-gray-500 mb-1"><i class="fas fa-spray-can mr-1"></i>Layanan</p>
                                     <p class="font-semibold text-gray-800">
                                         @if($order->service_type == 'cuci_kering') Cuci Kering
-                                        @elseif($order->service_type == 'cuci_setrika') Cuci & Setrika
+                                        @elseif($order->service_type == 'cuci_setrika') Cuci &amp; Setrika
                                         @elseif($order->service_type == 'setrika_saja') Setrika Saja
                                         @else {{ $order->service_type }}
                                         @endif
@@ -337,6 +340,14 @@
                                     <p class="font-semibold text-gray-800">{{ number_format($order->weight, 1) }} kg</p>
                                 </div>
                             </div>
+
+                            @if($order->is_express)
+                            <div class="mb-3 bg-yellow-50 border border-yellow-200 rounded-lg p-2">
+                                <p class="text-xs text-yellow-800 font-semibold">
+                                    <i class="fas fa-bolt text-yellow-600 mr-1"></i>Layanan Express (24 Jam)
+                                </p>
+                            </div>
+                            @endif
                             
                             <div class="flex justify-between items-center pt-3 md:pt-4 border-t-2 border-gray-100">
                                 <div>
@@ -345,13 +356,13 @@
                                     <p class="text-xs text-gray-500 mt-1">
                                         <i class="fas fa-{{ ($order->payment_method ?? 'cash') == 'midtrans' ? 'credit-card' : 'money-bill-wave' }} mr-1"></i>
                                         {{ ($order->payment_method ?? 'cash') == 'midtrans' ? 'Online' : 'Tunai' }}
-                                        @if(in_array(($order->payment_status ?? 'unpaid'), ['paid', 'success']))
+                                        @if($isPaid)
                                             <span class="text-green-600 font-semibold">• Lunas</span>
                                         @endif
                                     </p>
                                 </div>
                                 <button onclick="event.stopPropagation(); viewDetail({{ $order->id }})" 
-                                        class="px-4 md:px-6 py-2 md:py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-bold rounded-lg hover:from-blue-700 hover:to-blue-800 transition shadow-md hover:shadow-lg transform hover:scale-105">
+                                        class="detail-btn px-4 md:px-6 py-2 md:py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-bold rounded-lg hover:from-blue-700 hover:to-blue-800 transition shadow-md hover:shadow-lg transform hover:scale-105">
                                     <i class="fas fa-eye mr-2"></i>Detail
                                 </button>
                             </div>
@@ -389,7 +400,7 @@
                                     <p class="text-sm text-gray-500 mt-1">{{ $order->created_at->format('d M Y, H:i') }}</p>
                                 </div>
                                 <span class="px-3 py-1 rounded-full text-xs font-semibold bg-gray-200 text-gray-700">
-                                    <i class="fas fa-check-circle mr-1"></i>Selesai
+                                    <i class="fas fa-box mr-1"></i>Diambil
                                 </span>
                             </div>
                             <div class="grid grid-cols-2 gap-4 text-sm mb-4">
@@ -397,7 +408,7 @@
                                     <p class="text-xs text-gray-500 mb-1">Layanan</p>
                                     <p class="font-semibold text-gray-800">
                                         @if($order->service_type == 'cuci_kering') Cuci Kering
-                                        @elseif($order->service_type == 'cuci_setrika') Cuci & Setrika
+                                        @elseif($order->service_type == 'cuci_setrika') Cuci &amp; Setrika
                                         @elseif($order->service_type == 'setrika_saja') Setrika Saja
                                         @else {{ $order->service_type }}
                                         @endif
@@ -438,6 +449,6 @@
         </div>
     </div>
 
-    <script src="{{ asset('js/dashboard.js') }}"></script>
+    <script src="{{ asset('js/dashboard.js') }}?v={{ time() }}"></script>
 </body>
 </html>
